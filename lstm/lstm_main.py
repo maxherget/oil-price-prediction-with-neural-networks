@@ -8,7 +8,7 @@ from torch import device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 test_data = pd.read_csv('../data/AMZN.csv')  #liest das Dataset
-# print(test_data)
+print(test_data)
 test_data = test_data[['Date', 'Close']]
 # print(test_data)
 test_data['Date'] = pd.to_datetime(test_data['Date'])
@@ -188,6 +188,62 @@ for epoch in range(num_epochs):
     validate_one_epoch()
 
 
+with torch.no_grad():
+    predicted = model(X_train.to(device)).to('cpu').numpy()
+
+# zurückkonvertieren der Trainingsdaten-Werte von -1 bis 1 Scale auf og. Scale
+train_predictions = predicted.flatten()
+
+reconverter_dataset = np.zeros((X_train.shape[0], lookback_range + 1))
+reconverter_dataset[:, 0] = train_predictions
+reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+
+train_predictions = dc(reconverter_dataset[:, 0])
+train_predictions
+
+reconverter_dataset = np.zeros((X_train.shape[0], lookback_range + 1))
+reconverter_dataset[:, 0] = y_train.flatten()
+reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+
+new_y_train = dc(reconverter_dataset[:, 0])
+new_y_train
+
+
+# Graph zu der predicted/actual trainings-Daten
+plt.figure()  # Startet eine neue Figur
+plt.plot(new_y_train, label='Actual Close', color='blue')
+plt.plot(train_predictions, label='Predicted Close', color='red')
+plt.title('Training Data: Actual vs Predicted Close')
+plt.xlabel('Day')
+plt.ylabel('Close')
+plt.legend()
+plt.show()
+
+# zurückkonvertieren der Trainingsdaten-Werte von -1 bis 1 Scale auf og. Scale
+test_predictions = model(X_test.to(device)).detach().cpu().numpy().flatten()
+
+reconverter_dataset = np.zeros((X_test.shape[0], lookback_range + 1))
+reconverter_dataset[:, 0] = test_predictions
+reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+
+test_predictions = dc(reconverter_dataset[:, 0])
+
+reconverter_dataset = np.zeros((X_test.shape[0], lookback_range + 1))
+reconverter_dataset[:, 0] = y_test.flatten()
+reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+
+new_y_test = dc(reconverter_dataset[:, 0])
+new_y_test
+
+# Graph zu der predicted/actual test-Daten
+plt.figure()
+plt.plot(new_y_test, label='Actual Close', color='blue')
+plt.plot(test_predictions, label='Predicted Close', color='red')
+plt.title('Test Data: Actual vs Predicted Close')
+plt.xlabel('Day')
+plt.ylabel('Close')
+plt.legend()
+plt.show()
 
 
 
