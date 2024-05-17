@@ -8,7 +8,7 @@ from torch import device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 test_data = pd.read_csv('../data/Crude_Oil_data.csv')  #liest das Dataset
-print(test_data)
+# print(test_data)
 test_data = test_data[['date', 'close']]
 # print(test_data)
 test_data['date'] = pd.to_datetime(test_data['date'])
@@ -53,7 +53,7 @@ y = shifted_dataframe_as_np[:, 0]  # der Predictor, also die erste Zeile
 X = dc(np.flip(X, axis=1))
 # print(X)
 
-split_index = int(len(X) * 0.95)  # 95% der Daten werden zum trainieren genutzt , restl. 5 zum testen
+split_index = int(len(X) * 0.95)  # 95% der Daten werden zum trainieren genutzt , restl. 10 zum testen
 # print(split_index)
 
 X_train = X[:split_index]
@@ -133,7 +133,7 @@ print(model)
 
 learning_rate = 0.001
 num_epochs = 10
-loss_function = nn.MSELoss()
+loss_function = nn.MSELoss() # einhetliche Loss-Funktion mit der Wir arbeiten
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
