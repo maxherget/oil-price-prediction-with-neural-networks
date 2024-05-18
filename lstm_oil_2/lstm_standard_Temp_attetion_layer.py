@@ -63,16 +63,36 @@ train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
+
+class Attention(nn.Module):
+    def __init__(self, hidden_layer_size):
+        super(Attention, self).__init__()
+        self.hidden_layer_size = hidden_layer_size
+        self.attention = nn.Sequential(
+            nn.Linear(hidden_layer_size, hidden_layer_size),
+            nn.Tanh(),
+            nn.Linear(hidden_layer_size, 1)
+        )
+
+    def forward(self, lstm_out):
+        attn_weights = self.attention(lstm_out)
+        attn_weights = torch.softmax(attn_weights, dim=1)
+        context = torch.sum(attn_weights * lstm_out, dim=1)
+        return context
+
+
 # LSTM Modell definieren
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size):
         super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True)
+        self.attention = Attention(hidden_layer_size)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
         lstm_out, _ = self.lstm(input_seq)
+        attn_out = self.attention(lstm_out)
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
