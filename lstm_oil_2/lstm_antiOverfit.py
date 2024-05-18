@@ -87,7 +87,7 @@ output_size = 1
 
 model = LSTMModel(input_size, hidden_layer_size, output_size).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=0.001)  # , weight_decay=0.01 -> L2-Regulierung
 
 # Early Stopping Callback
 class EarlyStopping:
@@ -142,6 +142,7 @@ for epoch in range(epochs):
         print("Early stopping")
         break
 
+
 # Modell evaluieren
 model.eval()
 test_losses = []
@@ -168,7 +169,7 @@ plt.figure(figsize=(14, 5))
 time_range = test_data.index[lookback_range + train_size : lookback_range + train_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
-plt.title('Crude Oil Prices Prediction')
+plt.title('Crude Oil Prices Prediction on Test Data')
 plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
