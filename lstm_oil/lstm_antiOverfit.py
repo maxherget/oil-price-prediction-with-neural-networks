@@ -14,6 +14,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
 
+# Seeds für Reproduzierbarkeit setzen
+np.random.seed(0)
+torch.manual_seed(0)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
@@ -153,9 +157,7 @@ with torch.no_grad():
 test_loss = np.mean(test_losses)
 print(f'Test Loss: {test_loss}')
 
-# Vorhersagen skalieren
-#predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val)
-#actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val)
+# Vorhersagen und tatsächliche Werte skalieren
 actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
 predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
 
@@ -170,9 +172,4 @@ plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
 plt.show()
-
-
-
-
-
 
