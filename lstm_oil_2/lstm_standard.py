@@ -1,10 +1,8 @@
-# Dropout-Schichten: Hinzufügte Dropout-Schicht in das LSTM-Modell, um Overfitting zu reduzieren. Early
-# Stopping: Implementierung eines Early Stopping-Mechanismus, um das Training zu stoppen, wenn die
-# Validierungsgenauigkeit nicht mehr verbessert wird.
 # Validierung: Training und Validierung werden getrennt durchgeführt, um Overfitting zu erkennen und zu vermeiden.
 # trainingsdatensatz=80%
 # batchgröße=32
 # hiddenlayer size= 50
+# lookback = 7 -> über 7 bis 50 nähert sich 0.0004 test loss an(wird schlechter)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -71,12 +69,10 @@ class LSTMModel(nn.Module):
         super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
         lstm_out, _ = self.lstm(input_seq)
-        lstm_out = self.dropout(lstm_out)
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
@@ -89,28 +85,9 @@ criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
 # Early Stopping Callback
-class EarlyStopping:
-    def __init__(self, patience=10, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss < self.best_loss - self.min_delta:
-            self.best_loss = val_loss
-            self.counter = 0
-        elif val_loss >= self.best_loss - self.min_delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
 
 # Training des Modells
 epochs = 100
-early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
 
 for epoch in range(epochs):
     model.train()
@@ -135,11 +112,6 @@ for epoch in range(epochs):
     val_loss = np.mean(val_losses)
 
     print(f'Epoch {epoch+1}, Train Loss: {train_loss}, Validation Loss: {val_loss}')
-
-    early_stopping(val_loss)
-    if early_stopping.early_stop:
-        print("Early stopping")
-        break
 
 # Modell evaluieren
 model.eval()
