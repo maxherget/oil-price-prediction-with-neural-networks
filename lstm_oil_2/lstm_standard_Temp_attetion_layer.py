@@ -108,30 +108,31 @@ optimizer = Adam(model.parameters(), lr=0.001)
 # Training des Modells
 epochs = 100
 
+train_losses = []
+val_losses = []
+
 for epoch in range(epochs):
     model.train()
-    train_losses = []
+    batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
         y_pred = model(X_batch.unsqueeze(-1))
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
-        train_losses.append(loss.item())
+        batch_train_losses.append(loss.item())
+    train_losses.append(np.mean(batch_train_losses))
 
     model.eval()
-    val_losses = []
+    batch_val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
             y_pred = model(X_batch.unsqueeze(-1))
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            val_losses.append(loss.item())
+            batch_val_losses.append(loss.item())
+    val_losses.append(np.mean(batch_val_losses))
 
-    train_loss = np.mean(train_losses)
-    val_loss = np.mean(val_losses)
-
-    print(f'Epoch {epoch+1}, Train Loss: {train_loss}, Validation Loss: {val_loss}')
-
+    print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
 
 # Lernkurven visualisieren um Overfitting sichtbarer zu machen
 plt.figure(figsize=(10, 6))

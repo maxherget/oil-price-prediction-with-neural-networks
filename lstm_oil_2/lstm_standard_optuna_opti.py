@@ -68,7 +68,7 @@ class LSTMModel(nn.Module):
 
 # Optuna-Ziel-Funktion
 def objective(trial):
-    lookback_range = trial.suggest_int('lookback', 7, 50)
+    lookback_range = trial.suggest_int('lookback', 5, 50)
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     batch_size = trial.suggest_int('batch_size', 16, 64)
     epochs = trial.suggest_int('epochs', 50, 200)
@@ -113,7 +113,7 @@ def objective(trial):
 
 # Optuna-Studie erstellen und starten
 study = optuna.create_study(direction='minimize')
-study.optimize(objective, n_trials=2)
+study.optimize(objective, n_trials=50)
 
 print("Beste Hyperparameter: ", study.best_params)
 
