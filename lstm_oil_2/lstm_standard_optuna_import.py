@@ -3,6 +3,17 @@
 # batchgröße=32
 # hiddenlayer size= 50
 # lookback = 7 -> über 7 bis 50 nähert sich 0.0004 test loss an(wird schlechter)
+import optuna_study
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+from torch.optim import Adam
+from copy import deepcopy as dc
+
+import optuna_study
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,7 +34,6 @@ test_data = pd.read_csv('../data/Crude_Oil_data.csv')
 test_data = test_data[['date', 'close']]
 test_data['date'] = pd.to_datetime(test_data['date'])
 
-
 # Manuelle Skalierung der Daten
 def min_max_scaling(data):
     min_val = np.min(data)
@@ -31,14 +41,11 @@ def min_max_scaling(data):
     scaled_data = (data - min_val) / (max_val - min_val)
     return scaled_data, min_val, max_val
 
-
 # Manuelle Umkehrung der Skalierung
 def inverse_min_max_scaling(scaled_data, min_val, max_val):
     return scaled_data * (max_val - min_val) + min_val
 
-
 test_data['close'], min_val, max_val = min_max_scaling(test_data['close'])
-
 
 def prepare_data_for_lstm(data_frame, n_steps):
     data_frame = dc(data_frame)
@@ -48,10 +55,8 @@ def prepare_data_for_lstm(data_frame, n_steps):
     data_frame.dropna(inplace=True)
     return data_frame
 
-
 lookback_range = 7
 shifted_dataframe = prepare_data_for_lstm(test_data, lookback_range)
-
 
 # Daten in Tensoren umwandeln
 def create_tensors(data_frame):
@@ -60,16 +65,6 @@ def create_tensors(data_frame):
     X = torch.tensor(X, dtype=torch.float32).to(device)
     y = torch.tensor(y, dtype=torch.float32).to(device)
     return X, y
-
-
-X, y = create_tensors(shifted_dataframe)
-dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
-
 
 # LSTM Modell definieren
 class LSTMModel(nn.Module):
@@ -84,22 +79,44 @@ class LSTMModel(nn.Module):
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
+model_config = {
+    "model_class": LSTMModel,
+    "input_size": 1,
+    "output_size": 1,
+    'loss_function': nn.MSELoss(),
+    'learn_rate': 0.001
+}
 
-input_size = lookback_range
-hidden_layer_size = 50
+best_params = optuna_study.run_study(test_data, prepare_data_for_lstm, create_tensors, model_config)
+
+# Mit besten Hyperparametern trainieren und evaluieren
+best_lookback = best_params['lookback']
+best_hidden_layer_size = best_params['hidden_layer_size']
+best_batch_size = best_params['batch_size']
+best_epochs = best_params['epochs']
+
+shifted_dataframe = prepare_data_for_lstm(test_data, best_lookback)
+
+X, y = create_tensors(shifted_dataframe)
+dataset = TensorDataset(X, y)
+train_size = int(0.8 * len(dataset))
+test_size = len(dataset) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+train_loader = DataLoader(train_dataset, batch_size=best_batch_size, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=best_batch_size, shuffle=False)
+
+input_size = best_lookback
 output_size = 1
 
-model = LSTMModel(input_size, hidden_layer_size, output_size).to(device)
+model = LSTMModel(input_size, best_hidden_layer_size, output_size).to(device)
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
 # Training des Modells
-epochs = 100
-
 train_losses = []
 val_losses = []
 
-for epoch in range(epochs):
+for epoch in range(best_epochs):
     model.train()
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
@@ -155,11 +172,12 @@ predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_
 # Visualisierung
 plt.figure(figsize=(14, 5))
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size: lookback_range + train_size + len(actuals)]
-plt.plot(time_range, actuals, label='Actual Prices')
+time_range = test_data.index[best_lookback + train_size: best_lookback + train_size + len(predictions)]
+plt.plot(time_range, actuals[:len(time_range)], label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
 plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
 plt.show()
+
