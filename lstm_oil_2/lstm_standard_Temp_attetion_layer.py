@@ -11,6 +11,14 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, TensorDataset
+from torch.optim import Adam
+from copy import deepcopy as dc
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -63,7 +71,6 @@ train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-
 class Attention(nn.Module):
     def __init__(self, hidden_layer_size):
         super(Attention, self).__init__()
@@ -80,33 +87,35 @@ class Attention(nn.Module):
         context = torch.sum(attn_weights * lstm_out, dim=1)
         return context
 
-
 # LSTM Modell definieren
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_layer_size, output_size):
+    def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, batch_first=True)
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
         self.attention = Attention(hidden_layer_size)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        lstm_out, _ = self.lstm(input_seq)
+        h0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
+        c0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
+        lstm_out, _ = self.lstm(input_seq, (h0, c0))
         attn_out = self.attention(lstm_out)
         predictions = self.linear(attn_out)
         return predictions
 
-input_size = lookback_range
+input_size = 1  # Da wir nur den 'close'-Wert verwenden
 hidden_layer_size = 50
+num_layers = 2
 output_size = 1
 
-model = LSTMModel(input_size, hidden_layer_size, output_size).to(device)
+model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
-
 # Training des Modells
-epochs = 100
+epochs = 50
 
 train_losses = []
 val_losses = []
@@ -116,7 +125,8 @@ for epoch in range(epochs):
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        y_pred = model(X_batch.unsqueeze(-1))
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
@@ -127,7 +137,8 @@ for epoch in range(epochs):
     batch_val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
-            y_pred = model(X_batch.unsqueeze(-1))
+            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+            y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
     val_losses.append(np.mean(batch_val_losses))
@@ -144,7 +155,6 @@ plt.legend()
 plt.title('Train and Validation Loss over Epochs')
 plt.show()
 
-
 # Modell evaluieren
 model.eval()
 test_losses = []
@@ -152,7 +162,8 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        y_pred = model(X_batch.unsqueeze(-1))
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
         predictions.extend(y_pred.cpu().numpy())
@@ -176,4 +187,5 @@ plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
 plt.show()
+
 
