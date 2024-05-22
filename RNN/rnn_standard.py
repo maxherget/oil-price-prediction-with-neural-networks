@@ -3,176 +3,149 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch import device
+from torch.utils.data import DataLoader, TensorDataset
+from torch.optim import Adam
+from copy import deepcopy as dc
 
+# Seeds für Reproduzierbarkeit setzen
+np.random.seed(0)
+torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Laden des Datensatzes
-test_data = pd.read_csv('../data/AMZN.csv')  # Ändern Sie den Pfad zu Ihrem Datensatz
-print(test_data)
+# Daten laden
+test_data = pd.read_csv('../data/Crude_Oil_data.csv')
+test_data = test_data[['date', 'close']]
+test_data['date'] = pd.to_datetime(test_data['date'])
 
-# Vorbereiten der Daten für das RNN
-test_data = test_data[['Date', 'Close']]
-test_data['Date'] = pd.to_datetime(test_data['Date'])
+# Manuelle Skalierung der Daten
+def min_max_scaling(data):
+    min_val = np.min(data)
+    max_val = np.max(data)
+    scaled_data = (data - min_val) / (max_val - min_val)
+    return scaled_data, min_val, max_val
 
-lookback_range = 7  # Anzahl der zu berücksichtigenden vergangenen Werte
-shifted_dataframe = prepare_data_for_lstm(test_data, lookback_range)
+# Manuelle Umkehrung der Skalierung
+def inverse_min_max_scaling(scaled_data, min_val, max_val):
+    return scaled_data * (max_val - min_val) + min_val
 
-# Normalisieren der Daten
-shifted_dataframe_as_np = shifted_dataframe.to_numpy()
-scaler = MinMaxScaler(feature_range=(-1, 1))
-shifted_dataframe_as_np = scaler.fit_transform(shifted_dataframe_as_np)
+test_data['close'], min_val, max_val = min_max_scaling(test_data['close'])
 
-# Trennen von X (Eingabedaten) und y (Zielwerte)
-X = shifted_dataframe_as_np[:, 1:]  # Alle Daten aus der Vergangenheit
-y = shifted_dataframe_as_np[:, 0]  # Der zu prognostizierende Wert
+def prepare_data_for_rnn(data_frame, n_steps):
+    data_frame = dc(data_frame)
+    data_frame.set_index('date', inplace=True)
+    for i in range(1, n_steps + 1):
+        data_frame[f'close(t-{i})'] = data_frame['close'].shift(i)
+    data_frame.dropna(inplace=True)
+    return data_frame
 
-# Umkehren der Reihenfolge der Eingabedaten
-X = dc(np.flip(X, axis=1))
+lookback_range = 7
+shifted_dataframe = prepare_data_for_rnn(test_data, lookback_range)
 
-# Aufteilen der Daten in Trainings- und Testdatensätze
-split_index = int(len(X) * 0.95)
-X_train = X[:split_index]
-X_test = X[split_index:]
-y_train = y[:split_index]
-y_test = y[split_index:]
+# Daten in Tensoren umwandeln
+def create_tensors(data_frame):
+    X = data_frame.drop('close', axis=1).values
+    y = data_frame['close'].values
+    X = torch.tensor(X, dtype=torch.float32).to(device)
+    y = torch.tensor(y, dtype=torch.float32).to(device)
+    return X, y
 
-# Umformen der Daten in die richtige Dimension für das RNN
-X_train = X_train.reshape((-1, lookback_range, 1))
-X_test = X_test.reshape((-1, lookback_range, 1))
+X, y = create_tensors(shifted_dataframe)
+dataset = TensorDataset(X, y)
+train_size = int(0.8 * len(dataset))
+test_size = len(dataset) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-# Konvertieren in PyTorch-Tensoren
-X_train = torch.tensor(X_train).float().to(device)
-y_train = torch.tensor(y_train).float().to(device)
-X_test = torch.tensor(X_test).float().to(device)
-y_test = torch.tensor(y_test).float().to(device)
+# RNN Modell definieren
+class RNNModel(nn.Module):
+    def __init__(self, input_size, hidden_layer_size, output_size):
+        super(RNNModel, self).__init__()
+        self.hidden_layer_size = hidden_layer_size
+        self.rnn = nn.RNN(input_size, hidden_layer_size, batch_first=True)
+        self.linear = nn.Linear(hidden_layer_size, output_size)
 
-# Definieren des Datensatzes
-class CustomDataset(Dataset):
-    def __init__(self, X, y):
-        self.X = X
-        self.y = y
+    def forward(self, input_seq):
+        rnn_out, _ = self.rnn(input_seq)
+        predictions = self.linear(rnn_out[:, -1])
+        return predictions
 
-    def __len__(self):
-        return len(self.X)
+input_size = lookback_range
+hidden_layer_size = 50
+output_size = 1
 
-    def __getitem__(self, i):
-        return self.X[i], self.y[i]
-
-train_dataset = CustomDataset(X_train, y_train)
-test_dataset = CustomDataset(X_test, y_test)
-
-# Laden der Datensätze in den DataLoader
-batch_size = 16
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-# Definieren des RNN-Modells
-class RNN(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers):
-        super().__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, 1)
-
-    def forward(self, x):
-        output, _ = self.rnn(x)  # Ignorieren Sie den verborgenen Zustand
-        output = self.fc(output[:, -1, :])  # Nehmen Sie die letzte Ausgabe der RNN
-        return output
-
-model = RNN(1, 4, 2).to(device)  # Anpassen von input_size, hidden_size und num_layers
-print(model)
-
-# Definieren der Trainings- und Validierungsfunktionen
-learning_rate = 0.001
-num_epochs = 10
-loss_function = nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-def train_one_epoch():
-    model.train()
-    running_loss = 0.0
-
-    for batch_index, batch in enumerate(train_loader):
-        x_batch, y_batch = batch[0].to(device), batch[1].to(device)
-        y_batch = y_batch.unsqueeze(1)  # Anpassung der Dimensionen
-
-        output = model(x_batch)
-        loss = loss_function(output, y_batch)
-        running_loss += loss.item()
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if batch_index % 100 == 99:  # Ausgabe alle 100 Batches
-            avg_loss_across_batches = running_loss / 100
-            print(f'Batch {batch_index + 1}, avg. Loss: {avg_loss_across_batches:.3f}')
-            running_loss = 0.0
-    print()
-
-def validate_one_epoch():
-    model.eval()
-    running_loss = 0.0
-
-    for batch_index, batch in enumerate(test_loader):
-        x_batch, y_batch = batch[0].to(device), batch[1].to(device)
-        y_batch = y_batch.unsqueeze(1)  # Gleiche Anpassung wie oben
-
-        with torch.no_grad():
-            output = model(x_batch)
-            loss = loss_function(output, y_batch)
-            running_loss += loss.item()
-
-    avg_loss_across_batches = running_loss / len(test_loader)
-    print(f'Valid. Loss: {avg_loss_across_batches:.3f}')  # Ausgabe des Validierungsverlusts
-    print('###########################################')
-    print()
+model = RNNModel(input_size, hidden_layer_size, output_size).to(device)
+criterion = nn.MSELoss()
+optimizer = Adam(model.parameters(), lr=0.001)
 
 # Training des Modells
-for epoch in range(num_epochs):
-    train_one_epoch()
-    validate_one_epoch()
+epochs = 100
 
-# Vorhersagen auf dem Trainingsdatensatz
-with torch.no_grad():
-    predicted = model(X_train.to(device)).to('cpu').numpy()
+for epoch in range(epochs):
+    model.train()
+    train_losses = []
+    for X_batch, y_batch in train_loader:
+        optimizer.zero_grad()
+        X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+        y_pred = model(X_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
+        loss.backward()
+        optimizer.step()
+        train_losses.append(loss.item())
 
-# Rückkonvertierung der Trainingsdaten von -1 bis 1 auf den ursprünglichen Maßstab
-train_predictions = predicted.flatten()
-reconverter_dataset = np.zeros((X_train.shape[0], lookback_range + 1))
-reconverter_dataset[:, 0] = train_predictions
-reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+    model.eval()
+    val_losses = []
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader:
+            X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+            y_pred = model(X_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
+            val_losses.append(loss.item())
 
-train_predictions = dc(reconverter_dataset[:, 0])
-new_y_train = dc(reconverter_dataset[:, 1])
+    train_loss = np.mean(train_losses)
+    val_loss = np.mean(val_losses)
 
-# Visualisierung der Vorhersagen vs. tatsächliche Werte im Trainingsdatensatz
-plt.figure()
-plt.plot(new_y_train, label='Actual Close', color='blue')
-plt.plot(train_predictions, label='Predicted Close', color='red')
-plt.title('Trainingsdaten: Tatsächliche vs. prognostizierte Schlusskurse')
-plt.xlabel('Tag')
-plt.ylabel('Schlusskurs')
+    print(f'Epoch {epoch+1}, Train Loss: {train_loss}, Validation Loss: {val_loss}')
+
+# Lernkurven visualisieren um Overfitting sichtbarer zu machen
+plt.figure(figsize=(10, 6))
+plt.plot(train_losses, label='Train Loss')
+plt.plot(val_losses, label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
 plt.legend()
+plt.title('Train and Validation Loss over Epochs')
 plt.show()
 
-# Vorhersagen auf dem Testdatensatz
+# Modell evaluieren
+model.eval()
+test_losses = []
+predictions = []
+actuals = []
 with torch.no_grad():
-    test_predictions = model(X_test.to(device)).detach().cpu().numpy().flatten()
+    for X_batch, y_batch in test_loader:
+        X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+        y_pred = model(X_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
+        test_losses.append(loss.item())
+        predictions.extend(y_pred.cpu().numpy())
+        actuals.extend(y_batch.cpu().numpy())
 
-# Rückkonvertierung der Testdaten von -1 bis 1 auf den ursprünglichen Maßstab
-reconverter_dataset = np.zeros((X_test.shape[0], lookback_range + 1))
-reconverter_dataset[:, 0] = test_predictions
-reconverter_dataset = scaler.inverse_transform(reconverter_dataset)
+test_loss = np.mean(test_losses)
+print(f'Test Loss: {test_loss}')
 
-test_predictions = dc(reconverter_dataset[:, 0])
-new_y_test = dc(reconverter_dataset[:, 1])
+# Vorhersagen und tatsächliche Werte skalieren
+actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
+predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
 
-# Visualisierung der Vorhersagen vs. tatsächliche Werte im Testdatensatz
-plt.figure()
-plt.plot(new_y_test, label='Actual Close', color='blue')
-plt.plot(test_predictions, label='Predicted Close', color='red')
-plt.title('Testdaten: Tatsächliche vs. prognostizierte Schlusskurse')
-plt.xlabel('Tag')
-plt.ylabel('Schlusskurs')
+# Visualisierung
+plt.figure(figsize=(14, 5))
+# Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
+time_range = test_data.index[lookback_range + train_size : lookback_range + train_size + len(actuals)]
+plt.plot(time_range, actuals, label='Actual Prices')
+plt.plot(time_range, predictions, label='Predicted Prices')
+plt.title('Crude Oil Prices Prediction on Test Data')
+plt.xlabel('Time (Days)')
+plt.ylabel('Price (USD)')
 plt.legend()
 plt.show()
