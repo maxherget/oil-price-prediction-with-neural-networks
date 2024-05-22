@@ -92,7 +92,7 @@ for epoch in range(epochs):
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
         if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, 1, input_size)  # Anpassung der Dimension für RNN-kompatible Eingabe
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
