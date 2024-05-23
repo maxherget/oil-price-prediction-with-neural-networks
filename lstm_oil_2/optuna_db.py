@@ -88,6 +88,50 @@ def find_best_trial_in_study(study_name):
     else:
         print(f'No trials found for study: {study_name}')
 
+def get_study_summaries():
+    storage = 'sqlite:///optuna_study.db'
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+
+    for summary in study_summaries:
+        print(f"Study Name: {summary.study_name}")
+        print(f"Direction: {summary.direction}")
+        print(f"Best Trial Number: {summary.best_trial_number}")
+        print(f"Best Trial Value: {summary.best_trial_value}")
+        print("")
+
+
+def get_all_trials_from_study(study_name):
+    storage = 'sqlite:///optuna_study.db'
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+        return
+
+    trials = study.trials
+
+    if trials:
+        for trial in trials:
+            print(f'Trial ID: {trial.number}')
+            print(f'Value: {trial.value}')
+            print(f'Params: {trial.params}')
+            print(f'State: {trial.state}')
+            print('')
+    else:
+        print(f'No trials found for study: {study_name}')
+
+
+def stop_running_study(study_name):
+    storage = 'sqlite:///optuna_study.db'
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+        study.stop()
+        print(f'Study {study_name} has been stopped.')
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+
 
 if __name__ == "__main__":
     #delete_study2('lstm_standard_allDatafeatures_optuna_opti')
