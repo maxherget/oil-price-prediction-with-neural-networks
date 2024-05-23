@@ -3,26 +3,6 @@ import os
 import inspect
 import sqlite3
 
-
-def create_study():
-    # Ermittelt den Dateinamen der aufrufenden Datei ohne die Dateierweiterung
-    stack = inspect.stack()
-    caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
-
-    storage = optuna.storages.RDBStorage(
-        url='sqlite:///optuna_study.db',
-        engine_kwargs={
-            'connect_args': {'timeout': 10}
-        }
-    )
-    study = optuna.create_study(study_name=caller_file, direction='minimize', storage=storage, load_if_exists=True)
-    return study
-
-import optuna
-import os
-import inspect
-
-
 def create_study():
     # Ermittelt den Dateinamen der aufrufenden Datei ohne die Dateierweiterung
     stack = inspect.stack()
@@ -132,9 +112,33 @@ def stop_running_study(study_name):
     except KeyError:
         print(f'No study found with the name: {study_name}')
 
+def count_all_trials():
+    storage = 'sqlite:///optuna_study.db'
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+    total_trials = 0
+
+    for study_summary in study_summaries:
+        study = optuna.load_study(study_name=study_summary.study_name, storage=storage)
+        total_trials += len(study.trials)
+
+    print(f'Total number of trials across all studies: {total_trials}')
+    return total_trials
+
+
+def delete_all_studies():
+    storage = 'sqlite:///optuna_study.db'
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+
+    for summary in study_summaries:
+        study_name = summary.study_name
+        optuna.delete_study(study_name=study_name, storage=storage)
+        print(f'Study {study_name} erfolgreich gelöscht')
+
+    print("All studies have been deleted.")
 
 if __name__ == "__main__":
-    #delete_study2('lstm_standard_allDatafeatures_optuna_opti')
+    #delete_study('')
+    delete_all_studies()
     find_best_trial()
     # delete_study('')
     # find_best_trial_in_study('')
