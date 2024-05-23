@@ -118,7 +118,7 @@ def objective(trial):
 
 # Optuna Studie erstellen und optimieren
 study = create_study()
-study.optimize(objective, n_trials=1)
+study.optimize(objective, n_trials=50)
 
 print('\nBest trial:')
 trial = study.best_trial
@@ -195,7 +195,8 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
