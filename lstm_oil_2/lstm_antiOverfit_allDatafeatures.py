@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-import optuna
-
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -53,14 +51,17 @@ dataset = TensorDataset(X, y)
 train_size = int(0.8 * len(dataset))
 test_size = len(dataset) - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-# LSTM Modell
+# LSTM Modell mit Dropout
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.2)
+        self.dropout = nn.Dropout(0.2)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
@@ -68,81 +69,42 @@ class LSTMModel(nn.Module):
         h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
         c0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
         lstm_out, _ = self.lstm(input_seq, (h0, c0))
-        lstm_out = lstm_out[:, -1, :]
+        lstm_out = self.dropout(lstm_out[:, -1, :])
         predictions = self.linear(lstm_out)
         return predictions
 
-def objective(trial):
-    input_size = X.shape[1]  # Anzahl der Features
-    output_size = 1  # Wir sagen die Schlusskurse voraus
-    hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
-    num_layers = trial.suggest_int('num_layers', 1, 3)
-    batch_size = trial.suggest_int('batch_size', 16, 128)
- #   learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
-    learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
-    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-    model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
-    criterion = nn.MSELoss()
-    optimizer = Adam(model.parameters(), lr=learn_rate)
-
-    for epoch in range(epochs):
-        model.train()
-        for X_batch, y_batch in train_loader:
-            optimizer.zero_grad()
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
-            y_pred = model(X_batch)
-            loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            loss.backward()
-            optimizer.step()
-
-    model.eval()
-    val_losses = []
-    with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
-            y_pred = model(X_batch)
-            loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            val_losses.append(loss.item())
-
-    return np.mean(val_losses)
-
-study = optuna.create_study(direction='minimize')
-study.optimize(objective, n_trials=1)
-
-print('\nBest trial:')
-trial = study.best_trial
-
-print('Value: ', trial.value)
-print('Params: ')
-for key, value in trial.params.items():
-    print(f'    {key}: {value}')
-print('')
-
-# Verwendung der besten Hyperparameter für das endgültige Training und die Bewertung
-best_params = trial.params
-hidden_layer_size = best_params['hidden_layer_size']
-num_layers = best_params['num_layers']
-batch_size = best_params['batch_size']
-learn_rate = best_params['learn_rate']
-epochs = best_params['epochs']
-
-input_size = X.shape[1]
+input_size = X.shape[1]  # Update die Anzahl der Features
+hidden_layer_size = 50
+num_layers = 2
 output_size = 1
-
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=learn_rate)
+optimizer = Adam(model.parameters(), lr=0.001)
+
+# Early Stopping Callback
+class EarlyStopping:
+    def __init__(self, patience=10, min_delta=0.0001):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+        elif val_loss >= self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
 
 # Training des Modells
+epochs = 50
+early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
 train_losses = []
 val_losses = []
 
@@ -172,6 +134,11 @@ for epoch in range(epochs):
     val_losses.append(np.mean(batch_val_losses))
 
     print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
+
+    early_stopping(val_losses[-1])
+    if early_stopping.early_stop:
+        print("Early stopping")
+        break
 
 # Lernkurven visualisieren um Overfitting sichtbarer zu machen
 plt.figure(figsize=(10, 6))
