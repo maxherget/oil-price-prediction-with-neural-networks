@@ -82,7 +82,8 @@ def objective(trial):
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
-    learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
+    #  learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
+    learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
     epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -96,7 +97,8 @@ def objective(trial):
         model.train()
         for X_batch, y_batch in train_loader:
             optimizer.zero_grad()
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             loss.backward()
@@ -106,7 +108,8 @@ def objective(trial):
     val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             val_losses.append(loss.item())
@@ -153,7 +156,8 @@ for epoch in range(epochs):
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
@@ -165,7 +169,8 @@ for epoch in range(epochs):
     batch_val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
