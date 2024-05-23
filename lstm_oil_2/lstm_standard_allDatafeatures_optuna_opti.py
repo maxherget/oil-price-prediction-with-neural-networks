@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 import optuna
-
+from optuna_db import create_study
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -112,7 +112,8 @@ def objective(trial):
 
     return np.mean(val_losses)
 
-study = optuna.create_study(direction='minimize')
+# Optuna Studie erstellen und optimieren
+study = create_study()
 study.optimize(objective, n_trials=1)
 
 print('\nBest trial:')
@@ -142,7 +143,7 @@ model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(dev
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=learn_rate)
 
-# Training des Modells
+# Training des Modells mit den besten Hyperparametern
 train_losses = []
 val_losses = []
 
