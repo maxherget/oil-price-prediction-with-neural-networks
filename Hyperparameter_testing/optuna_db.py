@@ -167,7 +167,7 @@ def list_all_studies_with_details():
         print("")
 
 
-if __name__ == "__main__"
+if __name__ == "__main__":
     print("\nHyperparameter Studies:")
     print("================================================================================")
     count_all_trials()

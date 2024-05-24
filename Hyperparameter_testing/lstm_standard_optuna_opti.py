@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-import optuna
 from optuna_db import create_study
 from copy import deepcopy as dc
 

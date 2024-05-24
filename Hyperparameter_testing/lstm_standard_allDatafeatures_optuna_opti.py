@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-import optuna
 from optuna_db import create_study
 
 # Seeds für Reproduzierbarkeit setzen
@@ -78,8 +77,8 @@ def objective(trial):
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
- #  learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
-    learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
+    learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
+ #  learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
     epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
