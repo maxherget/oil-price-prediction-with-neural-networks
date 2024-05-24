@@ -7,52 +7,48 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 import optuna
 from optuna_db import create_study
-from copy import deepcopy as dc
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
 torch.manual_seed(0)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
-test_data = test_data[['date', 'close']]
-test_data['date'] = pd.to_datetime(test_data['date'])
+data = pd.read_csv('../data/Crude_Oil_data.csv')
+data['date'] = pd.to_datetime(data['date'])
+data = data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
 
-# Manuelle Skalierung der Daten
+# Skalierung der Daten
 def min_max_scaling(data):
-    min_val = np.min(data)
-    max_val = np.max(data)
-    scaled_data = (data - min_val) / (max_val - min_val)
-    return scaled_data, min_val, max_val
+    min_vals = data.min()
+    max_vals = data.max()
+    scaled_data = (data - min_vals) / (max_vals - min_vals)
+    return scaled_data, min_vals, max_vals
 
-# Manuelle Umkehrung der Skalierung
-def inverse_min_max_scaling(scaled_data, min_val, max_val):
-    return scaled_data * (max_val - min_val) + min_val
+scaled_data, min_vals, max_vals = min_max_scaling(data)
 
-test_data['close'], min_val, max_val = min_max_scaling(test_data['close'])
-
+# Daten für LSTM vorbereiten
 def prepare_data_for_lstm(data_frame, n_steps):
-    data_frame = dc(data_frame)
-    data_frame.set_index('date', inplace=True)
+    output = data_frame.copy()
+    n_features = data_frame.shape[1]
     for i in range(1, n_steps + 1):
-        data_frame[f'close(t-{i})'] = data_frame['close'].shift(i)
-    data_frame.dropna(inplace=True)
-    return data_frame
+        for col in data_frame.columns:
+            output[f'{col}(t-{i})'] = data_frame[col].shift(i)
+    output.dropna(inplace=True)
+    return output
 
 lookback_range = 7
-shifted_dataframe = prepare_data_for_lstm(test_data, lookback_range)
+shifted_data = prepare_data_for_lstm(scaled_data, lookback_range)
 
 # Daten in Tensoren umwandeln
 def create_tensors(data_frame):
-    X = data_frame.drop('close', axis=1).values
+    X = data_frame.drop(['close'], axis=1).values
     y = data_frame['close'].values
     X = torch.tensor(X, dtype=torch.float32).to(device)
     y = torch.tensor(y, dtype=torch.float32).to(device)
     return X, y
 
-X, y = create_tensors(shifted_dataframe)
+X, y = create_tensors(shifted_data)
 dataset = TensorDataset(X, y)
 train_size = int(0.8 * len(dataset))
 test_size = len(dataset) - train_size
@@ -82,9 +78,9 @@ def objective(trial):
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
-    #  learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
+ #  learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
     learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
-    epochs = trial.suggest_int('epochs', 10, 100)
+    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -206,16 +202,18 @@ with torch.no_grad():
 test_loss = np.mean(test_losses)
 print(f'Test Loss: {test_loss}')
 
-# Vorhersagen und tatsächliche Werte skalieren
-actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
-predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
+# Vorhersagen und tatsächliche Werte zurückskalieren
+def inverse_scaling(scaled_values, min_val, max_val):
+    return scaled_values * (max_val - min_val) + min_val
 
-# Visualisierung
+predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+
+# Visualisierung der Vorhersagen und der tatsächlichen Werte
 plt.figure(figsize=(14, 5))
-# Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size: lookback_range + train_size + len(actuals)]
-plt.plot(time_range, actuals, label='Actual Prices')
-plt.plot(time_range, predictions, label='Predicted Prices')
+dates = data.index[lookback_range + train_size:lookback_range + train_size + len(actuals)]
+plt.plot(dates, actuals, label='Actual Prices')
+plt.plot(dates, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
 plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
