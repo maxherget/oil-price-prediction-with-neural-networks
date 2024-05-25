@@ -48,11 +48,13 @@ def create_tensors(data_frame):
 
 X, y = create_tensors(shifted_data)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
 # LSTM Modell
 class LSTMModel(nn.Module):
@@ -72,17 +74,23 @@ class LSTMModel(nn.Module):
         predictions = self.linear(lstm_out)
         return predictions
 
-input_size = X.shape[1]  # Update die Anzahl der Features
-hidden_layer_size = 50
+input_size = X.shape[1]  # Anzahl der Features
+output_size = 1  # Wir sagen die Schlusskurse voraus
+hidden_layer_size = 50  # Manuell festgelegte Parameter
 num_layers = 2
-output_size = 1
+batch_size = 64
+learn_rate = 0.001
+epochs = 50
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=learn_rate)
 
 # Training des Modells
-epochs = 50
 train_losses = []
 val_losses = []
 
@@ -103,7 +111,7 @@ for epoch in range(epochs):
     model.eval()
     batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
                 X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)

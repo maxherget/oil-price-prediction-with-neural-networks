@@ -1,8 +1,3 @@
-# Validierung: Training und Validierung werden getrennt durchgeführt, um Overfitting zu erkennen und zu vermeiden.
-# trainingsdatensatz=80%
-# batchgröße=32
-# hiddenlayer size= 50
-# lookback = 7 -> über 7 bis 50 nähert sich 0.0004 test loss an(wird schlechter)
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -57,13 +52,16 @@ def create_tensors(data_frame):
 
 X, y = create_tensors(shifted_dataframe)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-# LSTM Modell definieren
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
+
+
+# LSTM Modell
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(LSTMModel, self).__init__()
@@ -73,24 +71,31 @@ class LSTMModel(nn.Module):
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        h0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
-        c0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
+        batch_size = input_seq.size(0)
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
         lstm_out, _ = self.lstm(input_seq, (h0, c0))
-        predictions = self.linear(lstm_out[:, -1])
+        lstm_out = lstm_out[:, -1, :]
+        predictions = self.linear(lstm_out)
         return predictions
 
-input_size = 1  # Da wir nur den 'close'-Wert verwenden
-hidden_layer_size = 50
+input_size = X.shape[1]  # Anzahl der Features
+output_size = 1  # Wir sagen die Schlusskurse voraus
+hidden_layer_size = 50  # Manuell festgelegte Parameter
 num_layers = 2
-output_size = 1
+batch_size = 64
+learn_rate = 0.001
+epochs = 50
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=learn_rate)
 
 # Training des Modells
-epochs = 50
-
 train_losses = []
 val_losses = []
 
@@ -99,7 +104,8 @@ for epoch in range(epochs):
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
@@ -110,8 +116,9 @@ for epoch in range(epochs):
     model.eval()
     batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        for X_batch, y_batch in val_loader:
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
@@ -136,7 +143,8 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
@@ -153,7 +161,7 @@ predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_
 # Visualisierung
 plt.figure(figsize=(14, 5))
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size: lookback_range + train_size + len(actuals)]
+time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')

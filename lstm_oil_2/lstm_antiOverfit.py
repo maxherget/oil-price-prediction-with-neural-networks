@@ -1,12 +1,3 @@
-# Dropout-Schichten: Hinzufügte Dropout-Schicht in das LSTM-Modell, um Overfitting zu reduzieren. Early
-# Stopping: Implementierung eines Early Stopping-Mechanismus, um das Training zu stoppen, wenn die
-# Validierungsgenauigkeit nicht mehr verbessert wird.
-# Validierung: Training und Validierung werden getrennt durchgeführt, um Overfitting zu erkennen und zu vermeiden.
-# trainingsdatensatz=80%
-# batchgröße=32
-# hiddenlayer size= 50
-# lookback = 7 -> über 7 bis 50 nähert sich 0.0004 test loss an(wird schlechter)
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -61,11 +52,13 @@ def create_tensors(data_frame):
 
 X, y = create_tensors(shifted_dataframe)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
 # LSTM Modell definieren
 class LSTMModel(nn.Module):
@@ -85,18 +78,25 @@ class LSTMModel(nn.Module):
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
-input_size = 1  # Da wir nur den 'close'-Wert verwenden
+input_size = 1
+output_size = 1
 hidden_layer_size = 50
 num_layers = 2
-output_size = 1
+batch_size = 64
+learn_rate = 0.001
+epochs = 50
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=learn_rate)
 
 # Early Stopping Callback
 class EarlyStopping:
-    def __init__(self, patience=10, min_delta=0):
+    def __init__(self, patience=10, min_delta=0.0001):
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
@@ -114,37 +114,36 @@ class EarlyStopping:
             if self.counter >= self.patience:
                 self.early_stop = True
 
-# Training des Modells
-epochs = 100
 early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
+train_losses = []
+val_losses = []
 
 for epoch in range(epochs):
     model.train()
-    train_losses = []
+    batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
-        train_losses.append(loss.item())
+        batch_train_losses.append(loss.item())
+    train_losses.append(np.mean(batch_train_losses))
 
     model.eval()
-    val_losses = []
+    batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        for X_batch, y_batch in val_loader:
+            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            val_losses.append(loss.item())
+            batch_val_losses.append(loss.item())
+    val_losses.append(np.mean(batch_val_losses))
 
-    train_loss = np.mean(train_losses)
-    val_loss = np.mean(val_losses)
+    print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
 
-    print(f'Epoch {epoch+1}, Train Loss: {train_loss}, Validation Loss: {val_loss}')
-
-    early_stopping(val_loss)
+    early_stopping(val_losses[-1])
     if early_stopping.early_stop:
         print("Early stopping")
         break
@@ -156,7 +155,7 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)  # Sicherstellen, dass die Eingabe die richtige Form hat
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
@@ -173,7 +172,7 @@ predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_
 # Visualisierung
 plt.figure(figsize=(14, 5))
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size : lookback_range + train_size + len(actuals)]
+time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
@@ -181,5 +180,3 @@ plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
 plt.show()
-
-
