@@ -49,9 +49,13 @@ def create_tensors(data_frame):
 
 X, y = create_tensors(shifted_data)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
 # LSTM Modell mit Dropout
 class LSTMModel(nn.Module):
@@ -80,10 +84,10 @@ def objective(trial):
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
     learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
-    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
+    epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
     criterion = nn.MSELoss()
@@ -103,7 +107,7 @@ def objective(trial):
     model.eval()
     val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
                 X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
@@ -113,9 +117,8 @@ def objective(trial):
     return np.mean(val_losses)
 
 # Optuna-Studie starten
-# Optuna Studie erstellen und optimieren
 study = create_study()
-study.optimize(objective, n_trials=50)
+study.optimize(objective, n_trials=1)
 
 # Beste Ergebnisse anzeigen
 print("Best trial:")
@@ -136,6 +139,7 @@ learn_rate = best_params['learn_rate']
 epochs = best_params['epochs']
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
@@ -183,7 +187,7 @@ for epoch in range(epochs):
     model.eval()
     batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
                 X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)

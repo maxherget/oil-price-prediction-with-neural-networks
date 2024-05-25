@@ -5,8 +5,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from optuna_db import create_study
 from copy import deepcopy as dc
+from optuna_db import create_study
+import optuna
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -53,40 +54,44 @@ def create_tensors(data_frame):
 
 X, y = create_tensors(shifted_dataframe)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-# LSTM Modell
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
+
+# LSTM Modell definieren
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.dropout = nn.Dropout(0.2)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        batch_size = input_seq.size(0)
-        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
-        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        h0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
+        c0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
         lstm_out, _ = self.lstm(input_seq, (h0, c0))
-        lstm_out = lstm_out[:, -1, :]
-        predictions = self.linear(lstm_out)
+        lstm_out = self.dropout(lstm_out)
+        predictions = self.linear(lstm_out[:, -1])
         return predictions
 
+# Optuna-Studie erstellen
 def objective(trial):
-    input_size = X.shape[1]  # Anzahl der Features
-    output_size = 1  # Wir sagen die Schlusskurse voraus
+    input_size = 1  # Da wir nur den 'close'-Wert verwenden
+    output_size = 1
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
-    #  learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
-    learn_rate = trial.suggest_float('learn_rate', 0.001, 0.001)
+    learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
     epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
     criterion = nn.MSELoss()
@@ -96,8 +101,7 @@ def objective(trial):
         model.train()
         for X_batch, y_batch in train_loader:
             optimizer.zero_grad()
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
+            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             loss.backward()
@@ -106,47 +110,65 @@ def objective(trial):
     model.eval()
     val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
+        for X_batch, y_batch in val_loader:
+            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             val_losses.append(loss.item())
 
     return np.mean(val_losses)
 
-# Optuna Studie erstellen und optimieren
+# Optuna-Studie starten
 study = create_study()
-study.optimize(objective, n_trials=50)
+study.optimize(objective, n_trials=1)
 
-print('\nBest trial:')
+# Beste Ergebnisse anzeigen
+print("Best trial:")
 trial = study.best_trial
-
-print('Value: ', trial.value)
-print('Params: ')
+print(f"  Value: {trial.value}")
+print("  Params: ")
 for key, value in trial.params.items():
-    print(f'    {key}: {value}')
-print('')
+    print(f"    {key}: {value}")
 
-# Verwendung der besten Hyperparameter für das endgültige Training und die Bewertung
+# Mit den besten Parametern trainieren
 best_params = trial.params
+input_size = 1
+output_size = 1
 hidden_layer_size = best_params['hidden_layer_size']
 num_layers = best_params['num_layers']
 batch_size = best_params['batch_size']
 learn_rate = best_params['learn_rate']
 epochs = best_params['epochs']
 
-input_size = X.shape[1]
-output_size = 1
-
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=learn_rate)
 
-# Training des Modells mit den besten Hyperparametern
+# Early Stopping Callback
+class EarlyStopping:
+    def __init__(self, patience=10, min_delta=0.0001):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+        elif val_loss >= self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+
+early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
 train_losses = []
 val_losses = []
 
@@ -155,8 +177,7 @@ for epoch in range(epochs):
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, 1, input_size)
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
@@ -167,9 +188,8 @@ for epoch in range(epochs):
     model.eval()
     batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
+        for X_batch, y_batch in val_loader:
+            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
@@ -177,15 +197,10 @@ for epoch in range(epochs):
 
     print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
 
-# Lernkurven visualisieren um Overfitting sichtbarer zu machen
-plt.figure(figsize=(10, 6))
-plt.plot(train_losses, label='Train Loss')
-plt.plot(val_losses, label='Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.title('Train and Validation Loss over Epochs')
-plt.show()
+    early_stopping(val_losses[-1])
+    if early_stopping.early_stop:
+        print("Early stopping")
+        break
 
 # Modell evaluieren
 model.eval()
@@ -194,8 +209,7 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, 1, input_size)
+        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
@@ -212,7 +226,7 @@ predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_
 # Visualisierung
 plt.figure(figsize=(14, 5))
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size: lookback_range + train_size + len(actuals)]
+time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')

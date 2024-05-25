@@ -5,59 +5,58 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from copy import deepcopy as dc
 from optuna_db import create_study
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
 torch.manual_seed(0)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
-test_data = test_data[['date', 'close']]
-test_data['date'] = pd.to_datetime(test_data['date'])
+data = pd.read_csv('../data/Crude_Oil_data.csv')
+data['date'] = pd.to_datetime(data['date'])
+data = data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
 
-# Manuelle Skalierung der Daten
+# Skalierung der Daten
 def min_max_scaling(data):
-    min_val = np.min(data)
-    max_val = np.max(data)
-    scaled_data = (data - min_val) / (max_val - min_val)
-    return scaled_data, min_val, max_val
+    min_vals = data.min()
+    max_vals = data.max()
+    scaled_data = (data - min_vals) / (max_vals - min_vals)
+    return scaled_data, min_vals, max_vals
 
-# Manuelle Umkehrung der Skalierung
-def inverse_min_max_scaling(scaled_data, min_val, max_val):
-    return scaled_data * (max_val - min_val) + min_val
+scaled_data, min_vals, max_vals = min_max_scaling(data)
 
-test_data['close'], min_val, max_val = min_max_scaling(test_data['close'])
-
+# Daten für LSTM vorbereiten
 def prepare_data_for_lstm(data_frame, n_steps):
-    data_frame = dc(data_frame)
-    data_frame.set_index('date', inplace=True)
+    output = data_frame.copy()
+    n_features = data_frame.shape[1]
     for i in range(1, n_steps + 1):
-        data_frame[f'close(t-{i})'] = data_frame['close'].shift(i)
-    data_frame.dropna(inplace=True)
-    return data_frame
+        for col in data_frame.columns:
+            output[f'{col}(t-{i})'] = data_frame[col].shift(i)
+    output.dropna(inplace=True)
+    return output
 
 lookback_range = 7
-shifted_dataframe = prepare_data_for_lstm(test_data, lookback_range)
+shifted_data = prepare_data_for_lstm(scaled_data, lookback_range)
 
 # Daten in Tensoren umwandeln
 def create_tensors(data_frame):
-    X = data_frame.drop('close', axis=1).values
+    X = data_frame.drop(['close'], axis=1).values
     y = data_frame['close'].values
     X = torch.tensor(X, dtype=torch.float32).to(device)
     y = torch.tensor(y, dtype=torch.float32).to(device)
     return X, y
 
-X, y = create_tensors(shifted_dataframe)
+X, y = create_tensors(shifted_data)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
+
 
 class Attention(nn.Module):
     def __init__(self, hidden_layer_size):
@@ -75,7 +74,7 @@ class Attention(nn.Module):
         context = torch.sum(attn_weights * lstm_out, dim=1)
         return context
 
-# LSTM Modell definieren
+# LSTM Modell
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(LSTMModel, self).__init__()
@@ -83,30 +82,29 @@ class LSTMModel(nn.Module):
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True)
         self.attention = Attention(hidden_layer_size)
-        self.dropout = nn.Dropout(0.2)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        h0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
-        c0 = torch.zeros(self.num_layers, input_seq.size(0), self.hidden_layer_size).to(device)
+        batch_size = input_seq.size(0)
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
         lstm_out, _ = self.lstm(input_seq, (h0, c0))
-        lstm_out = self.dropout(lstm_out)
         attn_out = self.attention(lstm_out)
         predictions = self.linear(attn_out)
         return predictions
 
 # Optuna-Studie erstellen
 def objective(trial):
-    input_size = 1  # Da wir nur den 'close'-Wert verwenden
-    output_size = 1
+    input_size = X.shape[1]  # Anzahl der Features
+    output_size = 1  # Wir sagen die Schlusskurse voraus
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
     learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
-    epochs = trial.suggest_int('epochs', 10, 100)
+    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
     criterion = nn.MSELoss()
@@ -126,7 +124,7 @@ def objective(trial):
     model.eval()
     val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
                 X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
@@ -135,9 +133,9 @@ def objective(trial):
 
     return np.mean(val_losses)
 
-# Optuna-Studie starten
+# Optuna Studie erstellen und optimieren
 study = create_study()
-study.optimize(objective, n_trials=100)
+study.optimize(objective, n_trials=1)
 
 # Beste Ergebnisse anzeigen
 print("Best trial:")
@@ -149,7 +147,7 @@ for key, value in trial.params.items():
 
 # Mit den besten Parametern trainieren
 best_params = trial.params
-input_size = 1
+input_size = X.shape[1]
 output_size = 1
 hidden_layer_size = best_params['hidden_layer_size']
 num_layers = best_params['num_layers']
@@ -158,33 +156,13 @@ learn_rate = best_params['learn_rate']
 epochs = best_params['epochs']
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
 optimizer = Adam(model.parameters(), lr=learn_rate)
 
-# Early Stopping Callback
-class EarlyStopping:
-    def __init__(self, patience=10, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss < self.best_loss - self.min_delta:
-            self.best_loss = val_loss
-            self.counter = 0
-        elif val_loss >= self.best_loss - self.min_delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-
-early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
 train_losses = []
 val_losses = []
 
@@ -205,7 +183,7 @@ for epoch in range(epochs):
     model.eval()
     batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
+        for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
                 X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
@@ -214,11 +192,6 @@ for epoch in range(epochs):
     val_losses.append(np.mean(batch_val_losses))
 
     print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
-
-    early_stopping(val_losses[-1])
-    if early_stopping.early_stop:
-        print("Early stopping")
-        break
 
 # Lernkurven visualisieren um Overfitting sichtbarer zu machen
 plt.figure(figsize=(10, 6))
@@ -248,16 +221,18 @@ with torch.no_grad():
 test_loss = np.mean(test_losses)
 print(f'Test Loss: {test_loss}')
 
-# Vorhersagen und tatsächliche Werte skalieren
-actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
-predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
+# Vorhersagen und tatsächliche Werte zurückskalieren
+def inverse_scaling(scaled_values, min_val, max_val):
+    return scaled_values * (max_val - min_val) + min_val
 
-# Visualisierung
+predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+
+# Visualisierung der Vorhersagen und der tatsächlichen Werte
 plt.figure(figsize=(14, 5))
-# Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size : lookback_range + train_size + len(actuals)]
-plt.plot(time_range, actuals, label='Actual Prices')
-plt.plot(time_range, predictions, label='Predicted Prices')
+dates = data.index[lookback_range + train_size + val_size:lookback_range + train_size + val_size + len(actuals)]
+plt.plot(dates, actuals, label='Actual Prices')
+plt.plot(dates, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
 plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
