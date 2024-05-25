@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from optuna_db import create_study
+from optuna_db_controller import create_study
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -138,7 +138,7 @@ study = create_study()
 study.optimize(objective, n_trials=1)
 
 # Beste Ergebnisse anzeigen
-print("Best trial:")
+print("\nBest trial:")
 trial = study.best_trial
 print(f"  Value: {trial.value}")
 print("  Params: ")

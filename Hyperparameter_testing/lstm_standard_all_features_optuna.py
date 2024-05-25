@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from optuna_db import create_study
+from optuna_db_controller import create_study
 import optuna
 
 # Seeds für Reproduzierbarkeit setzen

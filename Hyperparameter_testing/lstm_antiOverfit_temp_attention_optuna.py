@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
-from optuna_db import create_study
+from optuna_db_controller import create_study
 import optuna
 
 # Seeds für Reproduzierbarkeit setzen
@@ -138,10 +138,10 @@ def objective(trial):
 
 # Optuna-Studie starten
 study = create_study()
-study.optimize(objective, n_trials=1)
+study.optimize(objective, n_trials=2)
 
 # Beste Ergebnisse anzeigen
-print("Best trial:")
+print("\nBest trial:")
 trial = study.best_trial
 print(f"  Value: {trial.value}")
 print("  Params: ")

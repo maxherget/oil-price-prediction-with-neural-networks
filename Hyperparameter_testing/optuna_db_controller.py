@@ -1,8 +1,24 @@
 import optuna
 import os
+import sys
 import inspect
-import sqlite3
+import subprocess
 
+
+def run_studies_for_models(scripts):
+    python_executable = sys.executable  # Holen Sie sich den aktuellen Python-Interpreter
+    for script in scripts:
+        script_path = os.path.abspath(script)  # Absoluten Pfad zum Skript verwenden
+
+        # Befehl zum Ausführen des Skripts
+        result = subprocess.run([python_executable, script_path], capture_output=True, text=True)
+
+        # Ausgabe des Skripts anzeigen
+        print(f"\nOutput for {script_path}:\n")
+        if result.stderr:
+            print(result.stderr)
+        print(result.stdout)
+        print("" + "-" * 50)
 
 def create_study():
     # Determine the name of the calling file without the file extension
@@ -25,6 +41,17 @@ def delete_study(study_name):
     print(f'Deleting study: {study_name}')
     optuna.delete_study(study_name=study_name, storage=storage)
     print(f'Study {study_name} deleted successfully')
+
+
+def transer_trials(old_study_name, new_study_name):
+    storage = 'sqlite:///optuna_study.db'
+    old_study = optuna.load_study(study_name=old_study_name, storage=storage)
+    new_study = optuna.create_study(study_name=new_study_name, storage=storage)
+
+    for trial in old_study.trials:
+        new_study.add_trial(trial)
+
+    #optuna.delete_study(study_name=old_study_name, storage=storage)
 
 
 def find_best_trial():
@@ -168,6 +195,15 @@ def list_all_studies_with_details():
 
 
 if __name__ == "__main__":
+
+    # models_to_run = [
+    #     'lstm_antiOverfit_optuna.py',
+    #     'lstm_antiOverfit_all_features_optuna.py',
+    #     'lstm_antiOverfit_temp_attention_optuna.py'
+    # ]
+    # run_studies_for_models(models_to_run)
+    #
+
     print("\nHyperparameter Studies:")
     print("================================================================================")
     count_all_trials()
