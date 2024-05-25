@@ -128,122 +128,122 @@ print("  Params: ")
 for key, value in trial.params.items():
     print(f"    {key}: {value}")
 
-# Mit den besten Parametern trainieren
-best_params = trial.params
-input_size = X.shape[1]
-output_size = 1
-hidden_layer_size = best_params['hidden_layer_size']
-num_layers = best_params['num_layers']
-batch_size = best_params['batch_size']
-learn_rate = best_params['learn_rate']
-epochs = best_params['epochs']
-
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
-criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=learn_rate)
-
-# Early Stopping Callback
-class EarlyStopping:
-    def __init__(self, patience=10, min_delta=0.0001):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.early_stop = False
-
-    def __call__(self, val_loss):
-        if self.best_loss is None:
-            self.best_loss = val_loss
-        elif val_loss < self.best_loss - self.min_delta:
-            self.best_loss = val_loss
-            self.counter = 0
-        elif val_loss >= self.best_loss - self.min_delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-
-early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
-train_losses = []
-val_losses = []
-
-for epoch in range(epochs):
-    model.train()
-    batch_train_losses = []
-    for X_batch, y_batch in train_loader:
-        optimizer.zero_grad()
-        if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, 1, input_size)
-        y_pred = model(X_batch)
-        loss = criterion(y_pred, y_batch.unsqueeze(-1))
-        loss.backward()
-        optimizer.step()
-        batch_train_losses.append(loss.item())
-    train_losses.append(np.mean(batch_train_losses))
-
-    model.eval()
-    batch_val_losses = []
-    with torch.no_grad():
-        for X_batch, y_batch in val_loader:
-            if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, 1, input_size)
-            y_pred = model(X_batch)
-            loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            batch_val_losses.append(loss.item())
-    val_losses.append(np.mean(batch_val_losses))
-
-    print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
-
-    early_stopping(val_losses[-1])
-    if early_stopping.early_stop:
-        print("Early stopping")
-        break
-
-# Lernkurven visualisieren um Overfitting sichtbarer zu machen
-plt.figure(figsize=(10, 6))
-plt.plot(train_losses, label='Train Loss')
-plt.plot(val_losses, label='Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.title('Train and Validation Loss over Epochs')
-plt.show()
-
-# Modell evaluieren
-model.eval()
-test_losses = []
-predictions = []
-actuals = []
-with torch.no_grad():
-    for X_batch, y_batch in test_loader:
-        if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, 1, input_size)
-        y_pred = model(X_batch)
-        loss = criterion(y_pred, y_batch.unsqueeze(-1))
-        test_losses.append(loss.item())
-        predictions.extend(y_pred.cpu().numpy())
-        actuals.extend(y_batch.cpu().numpy())
-
-test_loss = np.mean(test_losses)
-print(f'Test Loss: {test_loss}')
-
-# Vorhersagen und tatsächliche Werte zurückskalieren
-def inverse_scaling(scaled_values, min_val, max_val):
-    return scaled_values * (max_val - min_val) + min_val
-
-predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
-actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
-
-# Visualisierung der Vorhersagen und der tatsächlichen Werte
-plt.figure(figsize=(14, 5))
-dates = data.index[lookback_range + train_size:lookback_range + train_size + len(actuals)]
-plt.plot(dates, actuals, label='Actual Prices')
-plt.plot(dates, predictions, label='Predicted Prices')
-plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Days)')
-plt.ylabel('Price (USD)')
-plt.legend()
-plt.show()
+# # Mit den besten Parametern trainieren
+# best_params = trial.params
+# input_size = X.shape[1]
+# output_size = 1
+# hidden_layer_size = best_params['hidden_layer_size']
+# num_layers = best_params['num_layers']
+# batch_size = best_params['batch_size']
+# learn_rate = best_params['learn_rate']
+# epochs = best_params['epochs']
+#
+# train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+# val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+# test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+#
+# model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
+# criterion = nn.MSELoss()
+# optimizer = Adam(model.parameters(), lr=learn_rate)
+#
+# # Early Stopping Callback
+# class EarlyStopping:
+#     def __init__(self, patience=10, min_delta=0.0001):
+#         self.patience = patience
+#         self.min_delta = min_delta
+#         self.counter = 0
+#         self.best_loss = None
+#         self.early_stop = False
+#
+#     def __call__(self, val_loss):
+#         if self.best_loss is None:
+#             self.best_loss = val_loss
+#         elif val_loss < self.best_loss - self.min_delta:
+#             self.best_loss = val_loss
+#             self.counter = 0
+#         elif val_loss >= self.best_loss - self.min_delta:
+#             self.counter += 1
+#             if self.counter >= self.patience:
+#                 self.early_stop = True
+#
+# early_stopping = EarlyStopping(patience=10, min_delta=0.0001)
+# train_losses = []
+# val_losses = []
+#
+# for epoch in range(epochs):
+#     model.train()
+#     batch_train_losses = []
+#     for X_batch, y_batch in train_loader:
+#         optimizer.zero_grad()
+#         if X_batch.ndim != 3:
+#             X_batch = X_batch.view(-1, 1, input_size)
+#         y_pred = model(X_batch)
+#         loss = criterion(y_pred, y_batch.unsqueeze(-1))
+#         loss.backward()
+#         optimizer.step()
+#         batch_train_losses.append(loss.item())
+#     train_losses.append(np.mean(batch_train_losses))
+#
+#     model.eval()
+#     batch_val_losses = []
+#     with torch.no_grad():
+#         for X_batch, y_batch in val_loader:
+#             if X_batch.ndim != 3:
+#                 X_batch = X_batch.view(-1, 1, input_size)
+#             y_pred = model(X_batch)
+#             loss = criterion(y_pred, y_batch.unsqueeze(-1))
+#             batch_val_losses.append(loss.item())
+#     val_losses.append(np.mean(batch_val_losses))
+#
+#     print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
+#
+#     early_stopping(val_losses[-1])
+#     if early_stopping.early_stop:
+#         print("Early stopping")
+#         break
+#
+# # Lernkurven visualisieren um Overfitting sichtbarer zu machen
+# plt.figure(figsize=(10, 6))
+# plt.plot(train_losses, label='Train Loss')
+# plt.plot(val_losses, label='Validation Loss')
+# plt.xlabel('Epochs')
+# plt.ylabel('Loss')
+# plt.legend()
+# plt.title('Train and Validation Loss over Epochs')
+# plt.show()
+#
+# # Modell evaluieren
+# model.eval()
+# test_losses = []
+# predictions = []
+# actuals = []
+# with torch.no_grad():
+#     for X_batch, y_batch in test_loader:
+#         if X_batch.ndim != 3:
+#             X_batch = X_batch.view(-1, 1, input_size)
+#         y_pred = model(X_batch)
+#         loss = criterion(y_pred, y_batch.unsqueeze(-1))
+#         test_losses.append(loss.item())
+#         predictions.extend(y_pred.cpu().numpy())
+#         actuals.extend(y_batch.cpu().numpy())
+#
+# test_loss = np.mean(test_losses)
+# print(f'Test Loss: {test_loss}')
+#
+# # Vorhersagen und tatsächliche Werte zurückskalieren
+# def inverse_scaling(scaled_values, min_val, max_val):
+#     return scaled_values * (max_val - min_val) + min_val
+#
+# predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+# actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
+#
+# # Visualisierung der Vorhersagen und der tatsächlichen Werte
+# plt.figure(figsize=(14, 5))
+# dates = data.index[lookback_range + train_size:lookback_range + train_size + len(actuals)]
+# plt.plot(dates, actuals, label='Actual Prices')
+# plt.plot(dates, predictions, label='Predicted Prices')
+# plt.title('Crude Oil Prices Prediction on Test Data')
+# plt.xlabel('Time (Days)')
+# plt.ylabel('Price (USD)')
+# plt.legend()
+# plt.show()
