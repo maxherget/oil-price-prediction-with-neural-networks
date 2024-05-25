@@ -4,6 +4,8 @@ import sys
 import inspect
 import subprocess
 
+from optuna.storages import RDBStorage
+
 
 def run_studies_for_models(scripts):
     python_executable = sys.executable  # Holen Sie sich den aktuellen Python-Interpreter
@@ -20,18 +22,63 @@ def run_studies_for_models(scripts):
         print(result.stdout)
         print("" + "=" * 100)
 
+# def create_study():
+#     # Determine the name of the calling file without the file extension
+#     stack = inspect.stack()
+#     caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
+#
+#     storage = optuna.storages.RDBStorage(
+#         url='sqlite:///optuna_study.db',
+#         engine_kwargs={
+#             'connect_args': {'timeout': 10}
+#         }
+#     )
+#     study = optuna.create_study(study_name=caller_file, direction='minimize', storage=storage, load_if_exists=True)
+#     print(f"Study '{caller_file}' created or loaded successfully.")
+#     return study
+
+def get_best_trials(study_name, n_best=5):
+    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    study = optuna.load_study(study_name=study_name, storage=storage)
+    trials = study.trials_dataframe()
+    best_trials = trials.sort_values('value').head(n_best)
+    return best_trials
+
+
 def create_study():
-    # Determine the name of the calling file without the file extension
     stack = inspect.stack()
     caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
 
-    storage = optuna.storages.RDBStorage(
+    storage = RDBStorage(
         url='sqlite:///optuna_study.db',
         engine_kwargs={
             'connect_args': {'timeout': 10}
         }
     )
-    study = optuna.create_study(study_name=caller_file, direction='minimize', storage=storage, load_if_exists=True)
+
+    # best_trials = get_best_trials(caller_file)
+    # if not best_trials.empty:
+    #     best_params = best_trials[
+    #         ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict(
+    #         'records')
+    # else:
+    #     best_params = []
+
+    # Initialize TPESampler
+    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=5, multivariate=True)
+
+
+    study = optuna.create_study(
+        study_name=caller_file,
+        direction='minimize',
+        storage=storage,
+        load_if_exists=True,
+        sampler=sampler
+    )
+
+    # for params in best_params:
+    #     study.enqueue_trial(params)
+
     print(f"Study '{caller_file}' created or loaded successfully.")
     return study
 
@@ -197,18 +244,21 @@ def list_all_studies_with_details():
 if __name__ == "__main__":
 
     models_to_run = [
-        # 'lstm_antiOverfit_optuna.py',
-        # 'lstm_antiOverfit_all_features_optuna.py',
-        # 'lstm_antiOverfit_temp_attention_optuna.py',
-        # 'lstm_standard_all_features_optuna.py',
-        # 'lstm_standard_optuna.py',
-        # 'lstm_temp_attention_all_features_optuna.py',
-        # 'lstm_temp_attention_optuna.py'
+        'lstm_antiOverfit_optuna.py',
+        'lstm_antiOverfit_all_features_optuna.py',
+        'lstm_antiOverfit_temp_attention_optuna.py',
+        'lstm_standard_all_features_optuna.py',
+        'lstm_standard_optuna.py',
+        'lstm_temp_attention_all_features_optuna.py',
+        'lstm_temp_attention_optuna.py'
     ]
     run_studies_for_models(models_to_run)
 
+#transer_trials("lstm_antiOverfit_optuna",lstm_antiOverfit_optuna)
+    print(get_best_trials("lstm_standard_optuna").columns)
 
-    print("\nHyperparameter Studies:")
+
+    print("\nOverall Statistic:")
     print("" + "=" * 100)
     count_all_trials()
 
