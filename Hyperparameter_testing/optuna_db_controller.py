@@ -18,7 +18,7 @@ def run_studies_for_models(scripts):
         if result.stderr:
             print(result.stderr)
         print(result.stdout)
-        print("" + "-" * 50)
+        print("" + "=" * 100)
 
 def create_study():
     # Determine the name of the calling file without the file extension
@@ -196,22 +196,26 @@ def list_all_studies_with_details():
 
 if __name__ == "__main__":
 
-    # models_to_run = [
-    #     'lstm_antiOverfit_optuna.py',
-    #     'lstm_antiOverfit_all_features_optuna.py',
-    #     'lstm_antiOverfit_temp_attention_optuna.py'
-    # ]
-    # run_studies_for_models(models_to_run)
-    #
+    models_to_run = [
+        # 'lstm_antiOverfit_optuna.py',
+        # 'lstm_antiOverfit_all_features_optuna.py',
+        # 'lstm_antiOverfit_temp_attention_optuna.py',
+        # 'lstm_standard_all_features_optuna.py',
+        # 'lstm_standard_optuna.py',
+        # 'lstm_temp_attention_all_features_optuna.py',
+        # 'lstm_temp_attention_optuna.py'
+    ]
+    run_studies_for_models(models_to_run)
+
 
     print("\nHyperparameter Studies:")
-    print("================================================================================")
+    print("" + "=" * 100)
     count_all_trials()
 
-    print("================================================================================")
+    print("" + "=" * 100)
     print("Best Trial:\n")
     find_best_trial()
 
-    print("================================================================================")
+    print("" + "=" * 100)
     print("Summary of all Models:\n")
     list_all_studies_with_details()
