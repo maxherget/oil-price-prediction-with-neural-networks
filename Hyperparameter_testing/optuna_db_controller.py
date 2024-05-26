@@ -6,9 +6,13 @@ import subprocess
 
 from optuna.storages import RDBStorage
 
+db_relative_path = os.path.join(os.path.dirname(__file__), 'optuna_study.db')
+db_absolute_path = os.path.abspath(db_relative_path)
+
+sqlite_url = f'sqlite:///{db_absolute_path}'
 
 def run_studies_for_models(scripts):
-    python_executable = sys.executable  # Holen Sie sich den aktuellen Python-Interpreter
+    python_executable = sys.executable  # Holt sich den aktuellen Python-Interpreter
     for script in scripts:
         script_path = os.path.abspath(script)  # Absoluten Pfad zum Skript verwenden
 
@@ -125,7 +129,7 @@ def get_best_trial():
 
 def get_best_trial_from_study(study_name):
     storage = RDBStorage(
-        url='sqlite:///optuna_study.db',
+        url=sqlite_url,
         engine_kwargs={
             'connect_args': {'timeout': 10}
         }
@@ -273,13 +277,13 @@ if __name__ == "__main__":
     run_studies_for_models(models_to_run)
 
 
-    print("\nOverall Statistic:")
+    print("\nOverall statistics:")
     print("" + "=" * 100)
     count_studies()
     count_all_trials()
 
     print("" + "=" * 100)
-    print("Best Trial:\n")
+    print("Best Trial overall:\n")
     get_best_trial()
 
     print("" + "=" * 100)
