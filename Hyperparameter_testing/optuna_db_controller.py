@@ -37,13 +37,6 @@ def run_studies_for_models(scripts):
 #     print(f"Study '{caller_file}' created or loaded successfully.")
 #     return study
 
-def get_best_trials(study_name, n_best=5):
-    storage = RDBStorage(url='sqlite:///optuna_study.db')
-    study = optuna.load_study(study_name=study_name, storage=storage)
-    trials = study.trials_dataframe()
-    best_trials = trials.sort_values('value').head(n_best)
-    return best_trials
-
 
 def create_study():
     stack = inspect.stack()
@@ -56,7 +49,7 @@ def create_study():
         }
     )
 
-    best_trials = get_best_trials(caller_file)
+    best_trials = get_best_trials_from_study(caller_file)
     if not best_trials.empty:
         best_params = best_trials[
             ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict(
@@ -90,10 +83,6 @@ def delete_study(study_name):
     print(f'Study {study_name} deleted successfully')
 
 
-
-    #optuna.delete_study(study_name=old_study_name, storage=storage)
-
-
 def transfer_trials(source_study_name, target_study_name):
     storage = RDBStorage(url='sqlite:///optuna_study.db')
 
@@ -107,7 +96,7 @@ def transfer_trials(source_study_name, target_study_name):
     print(f"Transferred {len(source_study.trials)} trials from study {source_study_name} to study {target_study_name}")
 
 
-def find_best_trial():
+def get_best_trial():
     storage = 'sqlite:///optuna_study.db'
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     best_trial = None
@@ -129,12 +118,18 @@ def find_best_trial():
             print(f'  {param_name}: {param_value}')
     else:
         print('No trials found.')
+    return best_trial
 
 
 
 
-def find_best_trial_in_study(study_name):
-    storage = 'sqlite:///optuna_study.db'
+def get_best_trial_from_study(study_name):
+    storage = RDBStorage(
+        url='sqlite:///optuna_study.db',
+        engine_kwargs={
+            'connect_args': {'timeout': 10}
+        }
+    )
 
     try:
         study = optuna.load_study(study_name=study_name, storage=storage)
@@ -153,6 +148,15 @@ def find_best_trial_in_study(study_name):
             print(f'  {param_name}: {param_value}')
     else:
         print(f'No trials found for study: {study_name}')
+    return best_trial
+
+
+def get_best_trials_from_study(study_name, n_best=5):
+    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    study = optuna.load_study(study_name=study_name, storage=storage)
+    trials = study.trials_dataframe()
+    best_trials = trials.sort_values('value').head(n_best)
+    return best_trials
 
 
 def get_all_trials_from_study(study_name):
@@ -175,6 +179,7 @@ def get_all_trials_from_study(study_name):
             print('')
     else:
         print(f'No trials found for study: {study_name}')
+    return trials
 
 
 def stop_running_study(study_name):
@@ -205,6 +210,7 @@ def count_studies():
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     num_studies = len(study_summaries)
     print(f"Total number of studies for models: {num_studies}")
+    return num_studies
 
 
 def delete_all_studies():
@@ -251,6 +257,7 @@ def list_all_studies_with_details():
         else:
             print("No trials found.")
         print("")
+    return study_details
 
 
 if __name__ == "__main__":
@@ -273,7 +280,7 @@ if __name__ == "__main__":
 
     print("" + "=" * 100)
     print("Best Trial:\n")
-    find_best_trial()
+    get_best_trial()
 
     print("" + "=" * 100)
     print("Summary of all Models:\n")
