@@ -87,7 +87,7 @@ def objective(trial):
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
     num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
-    learn_rate = trial.suggest_float('learn_rate', 1e-5, 1e-1)
+    learn_rate = trial.suggest_float('learn_rate', 1e-3, 1e-1)
     epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -122,7 +122,7 @@ def objective(trial):
 
 # Optuna-Studie starten
 study = create_study()
-study.optimize(objective, n_trials=1)
+study.optimize(objective, n_trials=22)
 
 print('\nBest trial:')
 trial = study.best_trial
