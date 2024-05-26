@@ -56,17 +56,17 @@ def create_study():
         }
     )
 
-    # best_trials = get_best_trials(caller_file)
-    # if not best_trials.empty:
-    #     best_params = best_trials[
-    #         ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict(
-    #         'records')
-    # else:
-    #     best_params = []
+    best_trials = get_best_trials(caller_file)
+    if not best_trials.empty:
+        best_params = best_trials[
+            ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict(
+            'records')
+    else:
+        best_params = []
 
     # Initialize TPESampler
     sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=5, multivariate=True)
-
+    # constant_liar = True -> attribe for sampler for running many trials parallel.
 
     study = optuna.create_study(
         study_name=caller_file,
@@ -76,8 +76,8 @@ def create_study():
         sampler=sampler
     )
 
-    # for params in best_params:
-    #     study.enqueue_trial(params)
+    for params in best_params:
+        study.enqueue_trial(params)
 
     print(f"Study '{caller_file}' created or loaded successfully.")
     return study
@@ -254,16 +254,16 @@ def list_all_studies_with_details():
 
 
 if __name__ == "__main__":
-    # models_to_run = [
-    #     'lstm_antiOverfit_optuna.py',
-    #     'lstm_antiOverfit_all_features_optuna.py',
-    #     'lstm_antiOverfit_temp_attention_optuna.py',
-    #     'lstm_standard_all_features_optuna.py',
-    #     'lstm_standard_optuna.py',
-    #     'lstm_temp_attention_all_features_optuna.py',
-    #     'lstm_temp_attention_optuna.py'
-    # ]
-    # run_studies_for_models(models_to_run)
+    models_to_run = [
+        # 'lstm_antiOverfit_optuna.py',
+        # 'lstm_antiOverfit_all_features_optuna.py',
+        # 'lstm_antiOverfit_temp_attention_optuna.py',
+        # 'lstm_standard_all_features_optuna.py',
+        # 'lstm_standard_optuna.py',
+        # 'lstm_temp_attention_all_features_optuna.py',
+        # 'lstm_temp_attention_optuna.py'
+    ]
+    run_studies_for_models(models_to_run)
 
 
     print("\nOverall Statistic:")
