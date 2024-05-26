@@ -65,7 +65,7 @@ def create_study():
         best_params = []
 
     # Initialize TPESampler
-    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=5, multivariate=True)
+    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True)
     # constant_liar = True -> attribe for sampler for running many trials parallel.
 
     study = optuna.create_study(
@@ -204,7 +204,7 @@ def count_studies():
     storage = RDBStorage(url='sqlite:///optuna_study.db')
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     num_studies = len(study_summaries)
-    print(f"Total number of studies: {num_studies}")
+    print(f"Total number of studies for models: {num_studies}")
 
 
 def delete_all_studies():
