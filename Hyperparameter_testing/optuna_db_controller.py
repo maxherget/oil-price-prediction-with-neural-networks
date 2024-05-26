@@ -65,7 +65,7 @@ def create_study():
         best_params = []
 
     # Initialize TPESampler
-    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True)
+    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True, warn_independent_sampling= False)
     # constant_liar = True -> attribe for sampler for running many trials parallel.
 
     study = optuna.create_study(

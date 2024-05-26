@@ -8,6 +8,8 @@ from torch.optim import Adam
 from copy import deepcopy as dc
 from optuna_db_controller import create_study
 import optuna
+import warnings
+
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -61,6 +63,11 @@ val_size = int(0.2 * len(dataset))    # 20% für Validierung
 test_size = len(dataset) - train_size - val_size  # 10% für Test
 
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
+
+# warning which occurs during certain hyperparameter testings. (numlayer =< 1 --> dropout superfluous)
+# However, the condition being warned about does not affect the correctness of the model
+warnings.filterwarnings("ignore", message="dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=")
+
 
 class Attention(nn.Module):
     def __init__(self, hidden_layer_size):
@@ -138,7 +145,7 @@ def objective(trial):
 
 # Optuna-Studie starten
 study = create_study()
-study.optimize(objective, n_trials=40)
+study.optimize(objective, n_trials=29)
 
 # Beste Ergebnisse anzeigen
 print("\nBest trial:")
