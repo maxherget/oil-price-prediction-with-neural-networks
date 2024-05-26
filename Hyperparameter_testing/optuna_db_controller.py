@@ -90,15 +90,21 @@ def delete_study(study_name):
     print(f'Study {study_name} deleted successfully')
 
 
-def transer_trials(old_study_name, new_study_name):
-    storage = 'sqlite:///optuna_study.db'
-    old_study = optuna.load_study(study_name=old_study_name, storage=storage)
-    new_study = optuna.create_study(study_name=new_study_name, storage=storage)
-
-    for trial in old_study.trials:
-        new_study.add_trial(trial)
 
     #optuna.delete_study(study_name=old_study_name, storage=storage)
+
+
+def transfer_trials(source_study_name, target_study_name):
+    storage = RDBStorage(url='sqlite:///optuna_study.db')
+
+    source_study = optuna.load_study(study_name=source_study_name, storage=storage)
+    target_study = optuna.load_study(study_name=target_study_name, storage=storage)
+
+    # Transfer each trial from the source study to the target study
+    for trial in source_study.trials:
+        target_study.add_trial(trial)
+
+    print(f"Transferred {len(source_study.trials)} trials from study {source_study_name} to study {target_study_name}")
 
 
 def find_best_trial():
@@ -194,6 +200,12 @@ def count_all_trials():
     print(f'Total number of trials across all studies: {total_trials}')
     return total_trials
 
+def count_studies():
+    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+    num_studies = len(study_summaries)
+    print(f"Total number of studies: {num_studies}")
+
 
 def delete_all_studies():
     storage = 'sqlite:///optuna_study.db'
@@ -242,24 +254,21 @@ def list_all_studies_with_details():
 
 
 if __name__ == "__main__":
-
-    models_to_run = [
-        'lstm_antiOverfit_optuna.py',
-        'lstm_antiOverfit_all_features_optuna.py',
-        'lstm_antiOverfit_temp_attention_optuna.py',
-        'lstm_standard_all_features_optuna.py',
-        'lstm_standard_optuna.py',
-        'lstm_temp_attention_all_features_optuna.py',
-        'lstm_temp_attention_optuna.py'
-    ]
-    run_studies_for_models(models_to_run)
-
-#transer_trials("lstm_antiOverfit_optuna",lstm_antiOverfit_optuna)
-    print(get_best_trials("lstm_standard_optuna").columns)
+    # models_to_run = [
+    #     'lstm_antiOverfit_optuna.py',
+    #     'lstm_antiOverfit_all_features_optuna.py',
+    #     'lstm_antiOverfit_temp_attention_optuna.py',
+    #     'lstm_standard_all_features_optuna.py',
+    #     'lstm_standard_optuna.py',
+    #     'lstm_temp_attention_all_features_optuna.py',
+    #     'lstm_temp_attention_optuna.py'
+    # ]
+    # run_studies_for_models(models_to_run)
 
 
     print("\nOverall Statistic:")
     print("" + "=" * 100)
+    count_studies()
     count_all_trials()
 
     print("" + "=" * 100)
