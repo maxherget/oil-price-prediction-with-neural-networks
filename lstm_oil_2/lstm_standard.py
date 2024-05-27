@@ -6,6 +6,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
+import matplotlib.dates as mdates
+from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -79,13 +81,21 @@ class LSTMModel(nn.Module):
         predictions = self.linear(lstm_out)
         return predictions
 
+
 input_size = X.shape[1]  # Anzahl der Features
 output_size = 1  # Wir sagen die Schlusskurse voraus
+# best_params = get_best_trial_from_study("lstm_standard_optuna")
+# hidden_layer_size = best_params['hidden_layer_size']
+# num_layers = best_params['num_layers']
+# batch_size = best_params['batch_size']
+# learn_rate = best_params['learn_rate']
+# epochs = best_params['epochs']
+
 hidden_layer_size = 50  # Manuell festgelegte Parameter
 num_layers = 2
 batch_size = 64
 learn_rate = 0.001
-epochs = 50
+epochs = 30
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -160,12 +170,21 @@ predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_
 
 # Visualisierung
 plt.figure(figsize=(14, 5))
+ax = plt.gca()
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
 time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Days)')
+plt.xlabel('Time (Years)')
 plt.ylabel('Price (USD)')
 plt.legend()
+
+# Formatter und Locator für halbe Jahre verwenden
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+# Optional: Minor Locator für Monate
+ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
 plt.show()
