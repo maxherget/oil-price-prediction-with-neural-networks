@@ -125,8 +125,6 @@ def get_best_trial():
     return best_trial
 
 
-
-
 def get_best_trial_from_study(study_name):
     storage = RDBStorage(
         url=sqlite_url,
@@ -139,7 +137,7 @@ def get_best_trial_from_study(study_name):
         study = optuna.load_study(study_name=study_name, storage=storage)
     except KeyError:
         print(f'No study found with the name: {study_name}')
-        return
+        return None
 
     best_trial = study.best_trial
 
@@ -152,6 +150,8 @@ def get_best_trial_from_study(study_name):
             print(f'  {param_name}: {param_value}')
     else:
         print(f'No trials found for study: {study_name}')
+    print("")
+
     return best_trial
 
 

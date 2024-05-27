@@ -6,10 +6,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
+import matplotlib.dates as mdates
+from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
 
-# Seeds für Reproduzierbarkeit setzen
-np.random.seed(0)
-torch.manual_seed(0)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -94,13 +93,28 @@ class LSTMModel(nn.Module):
         predictions = self.linear(attn_out)
         return predictions
 
-input_size = 1  # Da wir nur den 'close'-Wert verwenden
-output_size = 1
-hidden_layer_size = 50  # Manuell festgelegte Parameter
-num_layers = 2
-batch_size = 64
-learn_rate = 0.001
-epochs = 50
+best_trial = get_best_trial_from_study("lstm_standard_optuna")
+print("" + "=" * 100)
+
+input_size = X.shape[1]  # Anzahl der Features
+output_size = 1  # Wir sagen die Schlusskurse voraus
+
+if best_trial is not None:
+    print("Best parameters for model pulled from DB and used for run")
+    best_params = best_trial.params
+    hidden_layer_size = best_params['hidden_layer_size']
+    num_layers = best_params['num_layers']
+    batch_size = best_params['batch_size']
+    learn_rate = best_params['learn_rate']
+    epochs = best_params['epochs']
+else:
+    print("No Hyperparameter data in DB for this Model, running with manually set values")
+    hidden_layer_size = 50
+    num_layers = 2
+    batch_size = 16
+    learn_rate = 0.01
+    epochs = 50
+print("" + "=" * 100)
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -120,7 +134,7 @@ for epoch in range(epochs):
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
         if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, lookback_range, input_size)
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
@@ -133,7 +147,7 @@ for epoch in range(epochs):
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
             if X_batch.ndim != 3:
-                X_batch = X_batch.view(-1, lookback_range, input_size)
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
@@ -159,7 +173,7 @@ actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
         if X_batch.ndim != 3:
-            X_batch = X_batch.view(-1, lookback_range, input_size)
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())

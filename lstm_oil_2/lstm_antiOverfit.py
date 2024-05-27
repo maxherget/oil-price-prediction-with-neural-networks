@@ -6,10 +6,11 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
+import matplotlib.dates as mdates
+from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
+import warnings
 
-# Seeds für Reproduzierbarkeit setzen
-np.random.seed(0)
-torch.manual_seed(0)
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -60,6 +61,11 @@ test_size = len(dataset) - train_size - val_size  # 10% für Test
 
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
+# warning which occurs during certain hyperparameter testings. (numlayer =< 1 --> dropout superfluous)
+# However, the condition being warned about does not affect the correctness of the model
+warnings.filterwarnings("ignore", message="dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=")
+
+
 # LSTM Modell definieren
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
@@ -78,14 +84,28 @@ class LSTMModel(nn.Module):
         predictions = self.linear(lstm_out[:, -1])
         return predictions
 
-input_size = 1
-output_size = 1
-hidden_layer_size = 50
-num_layers = 2
-batch_size = 64
-learn_rate = 0.001
-epochs = 50
+best_trial = get_best_trial_from_study("lstm_antiOverfit_optuna")
+print("" + "=" * 100)
 
+input_size = X.shape[1]  # Anzahl der Features
+output_size = 1  # Wir sagen die Schlusskurse voraus
+
+if best_trial is not None:
+    print("Best parameters for model pulled from DB and used for run")
+    best_params = best_trial.params
+    hidden_layer_size = best_params['hidden_layer_size']
+    num_layers = best_params['num_layers']
+    batch_size = best_params['batch_size']
+    learn_rate = best_params['learn_rate']
+    epochs = best_params['epochs']
+else:
+    print("No Hyperparameter data in DB for this Model, running with manually set values")
+    hidden_layer_size = 50
+    num_layers = 2
+    batch_size = 16
+    learn_rate = 0.01
+    epochs = 50
+print("" + "=" * 100)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -123,7 +143,8 @@ for epoch in range(epochs):
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
@@ -135,7 +156,8 @@ for epoch in range(epochs):
     batch_val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
-            X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
@@ -155,7 +177,8 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        X_batch = X_batch.view(X_batch.size(0), lookback_range, input_size)
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
