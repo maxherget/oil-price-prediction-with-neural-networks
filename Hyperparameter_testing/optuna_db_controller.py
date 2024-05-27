@@ -209,6 +209,64 @@ def count_all_trials():
     print(f'Total number of trials across all studies: {total_trials}')
     return total_trials
 
+def get_trial_with_highest_loss_from_study(study_name):
+    storage = RDBStorage(
+        url=sqlite_url,
+        engine_kwargs={
+            'connect_args': {'timeout': 10}
+        }
+    )
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+        return
+
+    # Find the trial with the highest loss
+    trials = study.trials
+    if not trials:
+        print(f'No trials found for study: {study_name}')
+        return
+
+    highest_loss_trial = max(trials, key=lambda t: t.value if t.value is not None else float('-inf'))
+
+    print(f'Trial ID with Highest Loss: {highest_loss_trial.number}')
+    print(f'Loss Value: {highest_loss_trial.value}')
+    print(f'Model Name: {study_name}')
+    print('Hyperparameters:')
+    for param_name, param_value in highest_loss_trial.params.items():
+        print(f'  {param_name}: {param_value}')
+
+    return highest_loss_trial
+
+
+def get_trial_with_highest_loss_overall():
+    storage = 'sqlite:///optuna_study.db'
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+    worst_trial = None
+    worst_study_name = None
+
+    for study_summary in study_summaries:
+        study = optuna.load_study(study_name=study_summary.study_name, storage=storage)
+        for trial in study.trials:
+            if worst_trial is None or (trial.value is not None and trial.value > worst_trial.value):
+                worst_trial = trial
+                worst_study_name = study_summary.study_name
+
+    if worst_trial:
+        print(f'Worst Trial ID: {worst_trial.number}')
+        print(f'Loss Value: {worst_trial.value}')
+        print(f'Worst Model Name: {worst_study_name}')
+        print('Worst Hyperparameters:')
+        for param_name, param_value in worst_trial.params.items():
+            print(f'  {param_name}: {param_value}')
+    else:
+        print('No trials found.')
+
+    return worst_trial
+
+
 def count_studies():
     storage = RDBStorage(url='sqlite:///optuna_study.db')
     study_summaries = optuna.get_all_study_summaries(storage=storage)
