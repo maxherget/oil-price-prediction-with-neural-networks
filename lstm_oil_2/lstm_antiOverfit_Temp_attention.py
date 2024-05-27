@@ -193,18 +193,24 @@ with torch.no_grad():
 test_loss = np.mean(test_losses)
 print(f'Test Loss: {test_loss}')
 
-# Vorhersagen und tatsächliche Werte skalieren
-actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
-predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
-
 # Visualisierung
 plt.figure(figsize=(14, 5))
+ax = plt.gca()
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
 time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Days)')
+plt.xlabel('Time (Years)')
 plt.ylabel('Price (USD)')
 plt.legend()
+
+# Formatter und Locator für halbe Jahre verwenden
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+# Optional: Minor Locator für Monate
+ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
 plt.show()
+

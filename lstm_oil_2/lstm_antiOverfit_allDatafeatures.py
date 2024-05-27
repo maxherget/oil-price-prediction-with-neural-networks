@@ -182,14 +182,24 @@ def inverse_scaling(scaled_values, min_val, max_val):
 predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
 actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
 
-# Visualisierung der Vorhersagen und der tatsächlichen Werte
+# Visualisierung
 plt.figure(figsize=(14, 5))
-dates = data.index[lookback_range + train_size:lookback_range + train_size + len(actuals)]
-plt.plot(dates, actuals, label='Actual Prices')
-plt.plot(dates, predictions, label='Predicted Prices')
+ax = plt.gca()
+# Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
+time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
+plt.plot(time_range, actuals, label='Actual Prices')
+plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Days)')
+plt.xlabel('Time (Years)')
 plt.ylabel('Price (USD)')
 plt.legend()
+
+# Formatter und Locator für halbe Jahre verwenden
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+# Optional: Minor Locator für Monate
+ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
 plt.show()
 
