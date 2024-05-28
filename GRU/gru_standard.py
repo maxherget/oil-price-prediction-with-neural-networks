@@ -68,7 +68,7 @@ class GRUModel(nn.Module):
         return predictions
 
 # Training des Modells mit den besten Hyperparametern
-best_trial = get_best_trial_from_study("lstm_standard_optuna")
+best_trial = get_best_trial_from_study("gru_standard_optuna")
 print("" + "=" * 100)
 
 input_size = X.shape[1]  # Anzahl der Features
