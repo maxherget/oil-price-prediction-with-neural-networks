@@ -5,15 +5,17 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-import matplotlib.dates as mdates
-from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
+from optuna_db_controller import create_study
 
+# Seeds für Reproduzierbarkeit setzen
+np.random.seed(0)
+torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
-test_data['date'] = pd.to_datetime(test_data['date'])
-test_data = test_data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
+data = pd.read_csv('../data/Crude_Oil_data.csv')
+data['date'] = pd.to_datetime(data['date'])
+data = data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
 
 # Skalierung der Daten
 def min_max_scaling(data):
@@ -22,7 +24,7 @@ def min_max_scaling(data):
     scaled_data = (data - min_vals) / (max_vals - min_vals)
     return scaled_data, min_vals, max_vals
 
-scaled_data, min_vals, max_vals = min_max_scaling(test_data)
+scaled_data, min_vals, max_vals = min_max_scaling(data)
 
 # Daten für CNN vorbereiten
 def prepare_data_for_cnn(data_frame, n_steps):
@@ -73,65 +75,88 @@ class CNNModel(nn.Module):
         x = self.fc2(x)
         return x
 
-best_trial = get_best_trial_from_study("cnn_standard_optuna")
-print("" + "=" * 100)
+# Optuna-Studie erstellen
+def objective(trial):
+    input_size = (5, lookback_range)
+    output_size = 1  # Wir sagen die Schlusskurse voraus
+    conv1_out_channels = trial.suggest_int('conv1_out_channels', 10, 50)
+    conv2_out_channels = trial.suggest_int('conv2_out_channels', 10, 50)
+    fc1_units = trial.suggest_int('fc1_units', 10, 100)
+    batch_size = trial.suggest_int('batch_size', 16, 128)
+    learn_rate = trial.suggest_float('learn_rate', 1e-3, 1e-1)
+    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
 
-input_size = X.shape[1]  # Anzahl der Features
-output_size = 1  # Wir sagen die Schlusskurse voraus
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-if best_trial is not None:
-    print("Best parameters for model pulled from DB and used for run")
-    best_params = best_trial.params
-    conv1_out_channels = best_params['conv1_out_channels']
-    conv2_out_channels = best_params['conv2_out_channels']
-    fc1_units = best_params['fc1_units']
-    batch_size = best_params['batch_size']
-    learn_rate = best_params['learn_rate']
-    epochs = best_params['epochs']
-else:
-    print("No Hyperparameter data in DB for this Model, running with manually set values")
-    conv1_out_channels = 20
-    conv2_out_channels = 20
-    fc1_units = 50
-    batch_size = 16
-    learn_rate = 0.01
-    epochs = 50
-print("" + "=" * 100)
+    model = CNNModel(input_size, output_size, conv1_out_channels, conv2_out_channels, fc1_units).to(device)
+    criterion = nn.MSELoss()
+    optimizer = Adam(model.parameters(), lr=learn_rate)
 
-# # Verwendung der besten Hyperparameter für das endgültige Training und die Bewertung
-# best_params = {
-#     'conv1_out_channels': 20,
-#     'conv2_out_channels': 30,
-#     'fc1_units': 50,
-#     'batch_size': 64,
-#     'learn_rate': 0.01,
-#     'epochs': 50
-# }
+    for epoch in range(epochs):
+        model.train()
+        for X_batch, y_batch in train_loader:
+            optimizer.zero_grad()
+            y_pred = model(X_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
+            loss.backward()
+            optimizer.step()
+
+    model.eval()
+    val_losses = []
+    with torch.no_grad():
+        for X_batch, y_batch in val_loader:
+            y_pred = model(X_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
+            val_losses.append(loss.item())
+
+    return np.mean(val_losses)
+
+# Optuna-Studie starten
+study = create_study()
+study.optimize(objective, n_trials=1)
+
+# Beste Ergebnisse anzeigen
+print('\nBest trial:')
+trial = study.best_trial
+
+print('Value: ', trial.value)
+print('Params: ')
+for key, value in trial.params.items():
+    print(f'    {key}: {value}')
+print('')
+'''
+# Verwendung der besten Hyperparameter für das endgültige Training und die Bewertung
+best_params = trial.params
+conv1_out_channels = best_params['conv1_out_channels']
+conv2_out_channels = best_params['conv2_out_channels']
+fc1_units = best_params['fc1_units']
+batch_size = best_params['batch_size']
+learn_rate = best_params['learn_rate']
+epochs = best_params['epochs']
 
 input_size = (5, lookback_range)
 output_size = 1
 
-train_loader = DataLoader(train_dataset, batch_size=best_params['batch_size'], shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=best_params['batch_size'], shuffle=False)
-test_loader = DataLoader(test_dataset, batch_size=best_params['batch_size'], shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-model = CNNModel(input_size, output_size, best_params['conv1_out_channels'], best_params['conv2_out_channels'], best_params['fc1_units']).to(device)
+model = CNNModel(input_size, output_size, conv1_out_channels, conv2_out_channels, fc1_units).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=best_params['learn_rate'])
+optimizer = Adam(model.parameters(), lr=learn_rate)
 
 # Training des Modells mit den besten Hyperparametern
 train_losses = []
 val_losses = []
 
-for epoch in range(best_params['epochs']):
+for epoch in range(epochs):
     model.train()
     batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
         y_pred = model(X_batch)
-        # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-        y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-        loss = criterion(y_pred, y_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
         batch_train_losses.append(loss.item())
@@ -142,9 +167,7 @@ for epoch in range(best_params['epochs']):
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
             y_pred = model(X_batch)
-            # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-            y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-            loss = criterion(y_pred, y_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
     val_losses.append(np.mean(batch_val_losses))
 
@@ -168,9 +191,7 @@ actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
         y_pred = model(X_batch)
-        # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-        y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-        loss = criterion(y_pred, y_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
         predictions.extend(y_pred.cpu().numpy())
         actuals.extend(y_batch.cpu().numpy())
@@ -187,21 +208,11 @@ predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['cl
 
 # Visualisierung
 plt.figure(figsize=(14, 5))
-ax = plt.gca()
-# Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
-plt.plot(time_range, actuals, label='Actual Prices')
-plt.plot(time_range, predictions, label='Predicted Prices')
+plt.plot(actuals, label='Actual Prices')
+plt.plot(predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Years)')
+plt.xlabel('Time (Days)')
 plt.ylabel('Price (USD)')
 plt.legend()
-
-# Formatter und Locator für halbe Jahre verwenden
-ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
-
-# Optional: Minor Locator für Monate
-ax.xaxis.set_minor_locator(mdates.MonthLocator())
-
 plt.show()
+'''

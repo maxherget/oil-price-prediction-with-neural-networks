@@ -73,7 +73,7 @@ class CNNModel(nn.Module):
         x = self.fc2(x)
         return x
 
-best_trial = get_best_trial_from_study("cnn_standard_optuna")
+best_trial = get_best_trial_from_study("cnn_standard_all_features_optuna")
 print("" + "=" * 100)
 
 input_size = X.shape[1]  # Anzahl der Features
@@ -98,15 +98,6 @@ else:
     epochs = 50
 print("" + "=" * 100)
 
-# # Verwendung der besten Hyperparameter für das endgültige Training und die Bewertung
-# best_params = {
-#     'conv1_out_channels': 20,
-#     'conv2_out_channels': 30,
-#     'fc1_units': 50,
-#     'batch_size': 64,
-#     'learn_rate': 0.01,
-#     'epochs': 50
-# }
 
 input_size = (5, lookback_range)
 output_size = 1
@@ -129,9 +120,7 @@ for epoch in range(best_params['epochs']):
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
         y_pred = model(X_batch)
-        # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-        y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-        loss = criterion(y_pred, y_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
         batch_train_losses.append(loss.item())
@@ -142,9 +131,7 @@ for epoch in range(best_params['epochs']):
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
             y_pred = model(X_batch)
-            # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-            y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-            loss = criterion(y_pred, y_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
             batch_val_losses.append(loss.item())
     val_losses.append(np.mean(batch_val_losses))
 
@@ -168,9 +155,7 @@ actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
         y_pred = model(X_batch)
-        # Sicherstellen, dass die Größe von y_batch und y_pred korrekt ist
-        y_batch = y_batch.unsqueeze(-1)  # Die Größe von y_batch zu (batch_size, 1) ändern
-        loss = criterion(y_pred, y_batch)
+        loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
         predictions.extend(y_pred.cpu().numpy())
         actuals.extend(y_batch.cpu().numpy())
