@@ -274,6 +274,53 @@ def get_trial_with_highest_loss_overall():
     return worst_trial
 
 
+def get_best_and_worst_trial_from_study(study_name):
+    storage = RDBStorage(
+        url=sqlite_url,
+        engine_kwargs={
+            'connect_args': {'timeout': 10}
+        }
+    )
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+        return None, None
+
+    best_trial = study.best_trial
+
+    # Find the trial with the highest loss
+    trials = study.trials
+    if not trials:
+        print(f'No trials found for study: {study_name}')
+        return best_trial, None
+
+    highest_loss_trial = max(trials, key=lambda t: t.value if t.value is not None else float('-inf'))
+
+    if best_trial:
+        print("Best Trial in the study:")
+        print(f"Trial ID: {best_trial.number}")
+        print(f"Loss Value: {best_trial.value}")
+        print('Best Hyperparameters:')
+        for param_name, param_value in best_trial.params.items():
+            print(f'  {param_name}: {param_value}')
+    else:
+        print("No best trial found.")
+
+    if highest_loss_trial:
+        print("\nTrial with Highest Loss in the study:")
+        print(f"Trial ID: {highest_loss_trial.number}")
+        print(f"Loss Value: {highest_loss_trial.value}")
+        print('Hyperparameters:')
+        for param_name, param_value in highest_loss_trial.params.items():
+            print(f'  {param_name}: {param_value}')
+    else:
+        print("No trial with highest loss found.")
+
+    return best_trial, highest_loss_trial
+
+
 def count_studies():
     storage = RDBStorage(url='sqlite:///optuna_study.db')
     study_summaries = optuna.get_all_study_summaries(storage=storage)
@@ -354,9 +401,15 @@ def list_all_studies_with_details():
 
 
 if __name__ == "__main__":
-
+    #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
 
     models_to_run = [
+        # 'rnn_standard_optuna.py',
+        # 'rnn_standard_all_features_optuna.py',
+        # 'cnn_standard_optuna.py',
+        # 'cnn_standard_all_features_optuna.py',
+        # 'gru_standard_optuna.py'
+
         # 'lstm_antiOverfit_optuna.py',
         # 'lstm_antiOverfit_all_features_optuna.py',
         # 'lstm_antiOverfit_temp_attention_optuna.py',
@@ -364,6 +417,7 @@ if __name__ == "__main__":
         # 'lstm_standard_optuna.py',
         # 'lstm_temp_attention_all_features_optuna.py',
         # 'lstm_temp_attention_optuna.py'
+
     ]
     run_studies_for_models(models_to_run)
 
@@ -379,3 +433,4 @@ if __name__ == "__main__":
     print("" + "=" * 100)
     print("Summary of all Models:\n")
     list_all_studies_with_details()
+
