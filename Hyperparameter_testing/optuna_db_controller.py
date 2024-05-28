@@ -310,26 +310,52 @@ def list_all_studies_with_details():
         else:
             study_details.append((study_name, trial_count, None, None, None))
 
-    # Sort studies by the lowest loss value
-    study_details.sort(key=lambda x: (x[2] is not None, x[2]))
+    keyword_order = {"lstm": 0, "rnn": 1, "cnn": 2, "gru": 3}
+    grouped_studies = {keyword: [] for keyword in keyword_order.keys()}
 
     for detail in study_details:
         study_name, trial_count, best_value, best_trial_id, params = detail
-        print(f"Model Name: {study_name}")
-        print(f"Number of Trials: {trial_count}")
-        if best_value is not None:
-            print(f"Best Trial ID: {best_trial_id}")
-            print(f"Best Trial Value: {best_value}")
-            print("Best Hyperparameters:")
-            for param_name, param_value in params.items():
-                print(f"  {param_name}: {param_value}")
-        else:
-            print("No trials found.")
-        print("")
+        for keyword in keyword_order.keys():
+            if keyword in study_name:
+                grouped_studies[keyword].append(detail)
+                break
+
+    current_model_type = None
+    for keyword in keyword_order.keys():
+        studies = grouped_studies[keyword]
+        if not studies:
+            continue
+
+
+        studies.sort(key=lambda x: (x[2] if x[2] is not None else float('inf')))
+
+        if current_model_type != keyword.upper():
+            if current_model_type is not None:
+                print("-" * 100)
+            current_model_type = keyword.upper()
+            print(f"{current_model_type} Models:\n")
+
+        for detail in studies:
+            study_name, trial_count, best_value, best_trial_id, params = detail
+            print(f"Model Name: {study_name}")
+            print(f"Number of Trials: {trial_count}")
+            if best_value is not None:
+                print(f"Best Trial ID: {best_trial_id}")
+                print(f"Best Trial Value: {best_value}")
+                print("Best Hyperparameters:")
+                for param_name, param_value in params.items():
+                    print(f"  {param_name}: {param_value}")
+            else:
+                print("No trials found.")
+            print("")
+
+
     return study_details
 
 
 if __name__ == "__main__":
+
+
     models_to_run = [
         # 'lstm_antiOverfit_optuna.py',
         # 'lstm_antiOverfit_all_features_optuna.py',
