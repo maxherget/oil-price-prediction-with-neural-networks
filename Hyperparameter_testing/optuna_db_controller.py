@@ -55,13 +55,14 @@ def create_study():
         }
     )
 
-
-    best_trials = get_best_trials_from_study(caller_file)
-    if not best_trials.empty:
-        best_params = best_trials[
-                ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size',
-                 'params_learn_rate']].to_dict('records')
-    else:
+    try:
+        best_trials = get_best_trials_from_study(caller_file)
+        if not best_trials.empty:
+            best_params = best_trials[
+                    ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict('records')
+        else:
+            best_params = []
+    except KeyError:
         best_params = []
 
 
