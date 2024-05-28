@@ -5,11 +5,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from copy import deepcopy as dc
+import matplotlib.dates as mdates
+from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
 
-# Seeds für Reproduzierbarkeit setzen
-np.random.seed(0)
-torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
@@ -28,10 +26,11 @@ def min_max_scaling(data):
 def inverse_min_max_scaling(scaled_data, min_val, max_val):
     return scaled_data * (max_val - min_val) + min_val
 
-test_data['close'], min_val, max_val = min_max_scaling(test_data['close'])
+scaled_data = {}
+test_data['close'], scaled_data['close_min'], scaled_data['close_max'] = min_max_scaling(test_data['close'])
 
 def prepare_data_for_rnn(data_frame, n_steps):
-    data_frame = dc(data_frame)
+    data_frame = data_frame.copy()
     data_frame.set_index('date', inplace=True)
     for i in range(1, n_steps + 1):
         data_frame[f'close(t-{i})'] = data_frame['close'].shift(i)
@@ -42,70 +41,101 @@ lookback_range = 7
 shifted_dataframe = prepare_data_for_rnn(test_data, lookback_range)
 
 # Daten in Tensoren umwandeln
-def create_tensors(data_frame):
-    X = data_frame.drop('close', axis=1).values
-    y = data_frame['close'].values
-    X = torch.tensor(X, dtype=torch.float32).to(device)
-    y = torch.tensor(y, dtype=torch.float32).to(device)
-    return X, y
+def create_tensors(data_frame, target_col='close'):
+    features = data_frame.drop(target_col, axis=1).values
+    target = data_frame[target_col].values
+    features = torch.tensor(features, dtype=torch.float32).to(device)
+    target = torch.tensor(target, dtype=torch.float32).to(device)
+    return features, target
 
 X, y = create_tensors(shifted_dataframe)
 dataset = TensorDataset(X, y)
-train_size = int(0.8 * len(dataset))
-test_size = len(dataset) - train_size
-train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+# Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
+train_size = int(0.7 * len(dataset))  # 70% für Training
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
+test_size = len(dataset) - train_size - val_size  # 10% für Test
+
+train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
+
+# Parameterinitialisierung
+input_size = X.shape[1]  # Anzahl der Features
+output_size = 1  # Wir sagen die Schlusskurse voraus
+
+best_trial = get_best_trial_from_study("rnn_standard_close_only_optuna")
+print("=" * 100)
+
+if best_trial is not None:
+    print("Best parameters for model pulled from DB and used for run")
+    best_params = best_trial.params
+    hidden_layer_size = best_params['hidden_layer_size']
+    num_layers = best_params['num_layers']
+    batch_size = best_params['batch_size']
+    learn_rate = best_params['learn_rate']
+    epochs = best_params['epochs']
+else:
+    print("No Hyperparameter data in DB for this Model, running with manually set values")
+    hidden_layer_size = 50
+    num_layers = 2
+    batch_size = 16
+    learn_rate = 0.01
+    epochs = 50
+print("=" * 100)
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # RNN Modell definieren
 class RNNModel(nn.Module):
-    def __init__(self, input_size, hidden_layer_size, output_size):
+    def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
         super(RNNModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
-        self.rnn = nn.RNN(input_size, hidden_layer_size, batch_first=True)
+        self.num_layers = num_layers
+        self.rnn = nn.RNN(input_size, hidden_layer_size, num_layers, batch_first=True)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
-        rnn_out, _ = self.rnn(input_seq)
-        predictions = self.linear(rnn_out[:, -1])
+        batch_size = input_seq.size(0)
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        rnn_out, _ = self.rnn(input_seq, h0)
+        predictions = self.linear(rnn_out[:, -1, :])
         return predictions
 
-input_size = lookback_range
-hidden_layer_size = 50
-output_size = 1
-
-model = RNNModel(input_size, hidden_layer_size, output_size).to(device)
+model = RNNModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
 criterion = nn.MSELoss()
-optimizer = Adam(model.parameters(), lr=0.001)
+optimizer = Adam(model.parameters(), lr=learn_rate)
 
 # Training des Modells
-epochs = 100
+train_losses = []
+val_losses = []
 
 for epoch in range(epochs):
     model.train()
-    train_losses = []
+    batch_train_losses = []
     for X_batch, y_batch in train_loader:
         optimizer.zero_grad()
-        X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         loss.backward()
         optimizer.step()
-        train_losses.append(loss.item())
+        batch_train_losses.append(loss.item())
+    train_losses.append(np.mean(batch_train_losses))
 
     model.eval()
-    val_losses = []
+    batch_val_losses = []
     with torch.no_grad():
-        for X_batch, y_batch in test_loader:
-            X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+        for X_batch, y_batch in val_loader:
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
             y_pred = model(X_batch)
             loss = criterion(y_pred, y_batch.unsqueeze(-1))
-            val_losses.append(loss.item())
+            batch_val_losses.append(loss.item())
+    val_losses.append(np.mean(batch_val_losses))
 
-    train_loss = np.mean(train_losses)
-    val_loss = np.mean(val_losses)
-
-    print(f'Epoch {epoch+1}, Train Loss: {train_loss}, Validation Loss: {val_loss}')
+    print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
 
 # Lernkurven visualisieren um Overfitting sichtbarer zu machen
 plt.figure(figsize=(10, 6))
@@ -124,7 +154,8 @@ predictions = []
 actuals = []
 with torch.no_grad():
     for X_batch, y_batch in test_loader:
-        X_batch = X_batch.unsqueeze(1)  # Größe (Batch, Sequenzlänge, Inputgröße) herstellen
+        if X_batch.ndim != 3:
+            X_batch = X_batch.view(-1, 1, input_size)
         y_pred = model(X_batch)
         loss = criterion(y_pred, y_batch.unsqueeze(-1))
         test_losses.append(loss.item())
@@ -135,17 +166,26 @@ test_loss = np.mean(test_losses)
 print(f'Test Loss: {test_loss}')
 
 # Vorhersagen und tatsächliche Werte skalieren
-actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), min_val, max_val).flatten()
-predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), min_val, max_val).flatten()
+actuals = inverse_min_max_scaling(np.array(actuals).reshape(-1, 1), scaled_data['close_min'], scaled_data['close_max']).flatten()
+predictions = inverse_min_max_scaling(np.array(predictions).reshape(-1, 1), scaled_data['close_min'], scaled_data['close_max']).flatten()
 
 # Visualisierung
 plt.figure(figsize=(14, 5))
+ax = plt.gca()
 # Zeitachse anpassen: Tage von den tatsächlichen Daten verwenden
-time_range = test_data.index[lookback_range + train_size : lookback_range + train_size + len(actuals)]
+time_range = test_data.index[lookback_range + train_size + val_size: lookback_range + train_size + val_size + len(actuals)]
 plt.plot(time_range, actuals, label='Actual Prices')
 plt.plot(time_range, predictions, label='Predicted Prices')
 plt.title('Crude Oil Prices Prediction on Test Data')
-plt.xlabel('Time (Days)')
+plt.xlabel('Time (Years)')
 plt.ylabel('Price (USD)')
 plt.legend()
+
+# Formatter und Locator für halbe Jahre verwenden
+ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+# Optional: Minor Locator für Monate
+ax.xaxis.set_minor_locator(mdates.MonthLocator())
+
 plt.show()

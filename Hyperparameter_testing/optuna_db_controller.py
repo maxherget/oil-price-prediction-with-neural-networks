@@ -11,6 +11,7 @@ db_absolute_path = os.path.abspath(db_relative_path)
 
 sqlite_url = f'sqlite:///{db_absolute_path}'
 
+
 def run_studies_for_models(scripts):
     python_executable = sys.executable  # Holt sich den aktuellen Python-Interpreter
     for script in scripts:
@@ -25,6 +26,7 @@ def run_studies_for_models(scripts):
             print(result.stderr)
         print(result.stdout)
         print("" + "=" * 100)
+
 
 # def create_study():
 #     # Determine the name of the calling file without the file extension
@@ -53,23 +55,19 @@ def create_study():
         }
     )
 
-    try:
-        best_trials = get_best_trials_from_study(caller_file)
-        if not best_trials.empty:
-            if caller_file == "rnn_standard_allFeatures_optuna.py":
-                best_params = best_trials[
-                    ['params_hidden_layer_size', 'params_batch_size', 'params_learn_rate']].to_dict('records')
-            else:
-                best_params = best_trials[
-                    ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size',
-                     'params_learn_rate']].to_dict('records')
-        else:
-            best_params = []
-    except KeyError:
+
+    best_trials = get_best_trials_from_study(caller_file)
+    if not best_trials.empty:
+        best_params = best_trials[
+                ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size',
+                 'params_learn_rate']].to_dict('records')
+    else:
         best_params = []
 
+
     # Initialize TPESampler
-    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True, warn_independent_sampling= False)
+    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True,
+                                         warn_independent_sampling=False)
     # constant_liar = True -> attribe for sampler for running many trials parallel.
 
     study = optuna.create_study(
@@ -216,6 +214,7 @@ def count_all_trials():
     print(f'Total number of trials across all studies: {total_trials}')
     return total_trials
 
+
 def get_trial_with_highest_loss_from_study(study_name):
     storage = RDBStorage(
         url=sqlite_url,
@@ -340,7 +339,6 @@ if __name__ == "__main__":
         # 'lstm_temp_attention_optuna.py'
     ]
     run_studies_for_models(models_to_run)
-
 
     print("\nOverall statistics:")
     print("" + "=" * 100)
