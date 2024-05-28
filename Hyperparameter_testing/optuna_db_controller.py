@@ -28,22 +28,6 @@ def run_studies_for_models(scripts):
         print("" + "=" * 100)
 
 
-# def create_study():
-#     # Determine the name of the calling file without the file extension
-#     stack = inspect.stack()
-#     caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
-#
-#     storage = optuna.storages.RDBStorage(
-#         url='sqlite:///optuna_study.db',
-#         engine_kwargs={
-#             'connect_args': {'timeout': 10}
-#         }
-#     )
-#     study = optuna.create_study(study_name=caller_file, direction='minimize', storage=storage, load_if_exists=True)
-#     print(f"Study '{caller_file}' created or loaded successfully.")
-#     return study
-
-
 def create_study():
     stack = inspect.stack()
     caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
@@ -409,7 +393,6 @@ if __name__ == "__main__":
         # 'cnn_standard_optuna.py',
         # 'cnn_standard_all_features_optuna.py',
         # 'gru_standard_optuna.py'
-
         # 'lstm_antiOverfit_optuna.py',
         # 'lstm_antiOverfit_all_features_optuna.py',
         # 'lstm_antiOverfit_temp_attention_optuna.py',

@@ -7,3 +7,8 @@ if you run the corresponding ...Optuna.py of the model in the Python console.
 
 -You can get an overall overview of the models and their results by running the main of the [Controller](Hyperparameter_testing/optuna_db_controller.py).
 Further methods for handling the work results can also be put in its main for further information outputs
+
+
+### todo: 
+- datafile load verallgemeinern
+- kenntlich machen das plotzeitraum sich auf testdaten bezieht
