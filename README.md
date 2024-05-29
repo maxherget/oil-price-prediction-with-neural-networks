@@ -14,3 +14,5 @@ Further methods for handling the work results can also be put in its main for fu
 - kenntlich machen das plotzeitraum sich auf testdaten bezieht
 - Projekt Ordnerstruktur aufräumen
 - Ergebnisse für Präsentation vorbereiten 
+- methode die alle loss für einen bestimmte hyperparameter ausgibt
+- run scrips methode funtioniert nicht mehr wegen neuer ordnerstruktur

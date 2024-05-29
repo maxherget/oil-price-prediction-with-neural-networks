@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
-import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from Hyperparameter_DB.optuna_db_controller import create_study

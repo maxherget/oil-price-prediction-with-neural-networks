@@ -1,13 +1,11 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
 from Hyperparameter_DB.optuna_db_controller import create_study
-import optuna
 import warnings
 
 
