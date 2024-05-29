@@ -33,7 +33,7 @@ def create_study():
     caller_file = os.path.splitext(os.path.basename(stack[1].filename))[0]
 
     storage = RDBStorage(
-        url='sqlite:///optuna_study.db',
+        url=sqlite_url,
         engine_kwargs={
             'connect_args': {'timeout': 10}
         }
@@ -146,7 +146,7 @@ def get_best_trial_from_study(study_name):
 
 
 def get_best_trials_from_study(study_name, n_best=5):
-    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    storage = RDBStorage(url=sqlite_url)
     study = optuna.load_study(study_name=study_name, storage=storage)
     trials = study.trials_dataframe()
     best_trials = trials.sort_values('value').head(n_best)
@@ -283,7 +283,7 @@ def get_best_and_worst_trial_from_study(study_name):
     highest_loss_trial = max(trials, key=lambda t: t.value if t.value is not None else float('-inf'))
 
     if best_trial:
-        print("Best Trial in the study:")
+        print("Best Trial in the " + study_name + " study:")
         print(f"Trial ID: {best_trial.number}")
         print(f"Loss Value: {best_trial.value}")
         print('Best Hyperparameters:')
@@ -293,7 +293,7 @@ def get_best_and_worst_trial_from_study(study_name):
         print("No best trial found.")
 
     if highest_loss_trial:
-        print("\nTrial with Highest Loss in the study:")
+        print("\nTrial with Highest Loss in the " + study_name + " study:")
         print(f"Trial ID: {highest_loss_trial.number}")
         print(f"Loss Value: {highest_loss_trial.value}")
         print('Hyperparameters:')
@@ -402,7 +402,33 @@ if __name__ == "__main__":
         # 'lstm_temp_attention_optuna.py'
 
     ]
-    run_studies_for_models(models_to_run)
+    # run_studies_for_models(models_to_run)
+    # get_best_and_worst_trial_from_study('lstm_antiOverfit_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_antiOverfit_all_features_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_antiOverfit_temp_attention_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_standard_all_features_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_standard_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_temp_attention_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('lstm_temp_attention_all_features_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('rnn_standard_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('rnn_standard_all_features_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('cnn_standard_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('cnn_standard_all_features_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('gru_standard_optuna')
+    # print("" + "=" * 100)
+    # get_best_and_worst_trial_from_study('gru_standard_all_features_optuna')
+
 
     print("\nOverall statistics:")
     print("" + "=" * 100)

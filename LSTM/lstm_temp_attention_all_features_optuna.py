@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from optuna_db_controller import create_study
+from Hyperparameter_DB.optuna_db_controller import create_study
+
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -145,96 +145,3 @@ print("  Params: ")
 for key, value in trial.params.items():
     print(f"    {key}: {value}")
 
-# # Mit den besten Parametern trainieren
-# best_params = trial.params
-# input_size = X.shape[1]
-# output_size = 1
-# hidden_layer_size = best_params['hidden_layer_size']
-# num_layers = best_params['num_layers']
-# batch_size = best_params['batch_size']
-# learn_rate = best_params['learn_rate']
-# epochs = best_params['epochs']
-#
-# train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-# val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-# test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-#
-# model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
-# criterion = nn.MSELoss()
-# optimizer = Adam(model.parameters(), lr=learn_rate)
-#
-# train_losses = []
-# val_losses = []
-#
-# for epoch in range(epochs):
-#     model.train()
-#     batch_train_losses = []
-#     for X_batch, y_batch in train_loader:
-#         optimizer.zero_grad()
-#         if X_batch.ndim != 3:
-#             X_batch = X_batch.view(-1, 1, input_size)
-#         y_pred = model(X_batch)
-#         loss = criterion(y_pred, y_batch.unsqueeze(-1))
-#         loss.backward()
-#         optimizer.step()
-#         batch_train_losses.append(loss.item())
-#     train_losses.append(np.mean(batch_train_losses))
-#
-#     model.eval()
-#     batch_val_losses = []
-#     with torch.no_grad():
-#         for X_batch, y_batch in val_loader:
-#             if X_batch.ndim != 3:
-#                 X_batch = X_batch.view(-1, 1, input_size)
-#             y_pred = model(X_batch)
-#             loss = criterion(y_pred, y_batch.unsqueeze(-1))
-#             batch_val_losses.append(loss.item())
-#     val_losses.append(np.mean(batch_val_losses))
-#
-#     print(f'Epoch {epoch + 1}, Train Loss: {train_losses[-1]}, Validation Loss: {val_losses[-1]}')
-#
-# # Lernkurven visualisieren um Overfitting sichtbarer zu machen
-# plt.figure(figsize=(10, 6))
-# plt.plot(train_losses, label='Train Loss')
-# plt.plot(val_losses, label='Validation Loss')
-# plt.xlabel('Epochs')
-# plt.ylabel('Loss')
-# plt.legend()
-# plt.title('Train and Validation Loss over Epochs')
-# plt.show()
-#
-# # Modell evaluieren
-# model.eval()
-# test_losses = []
-# predictions = []
-# actuals = []
-# with torch.no_grad():
-#     for X_batch, y_batch in test_loader:
-#         if X_batch.ndim != 3:
-#             X_batch = X_batch.view(-1, 1, input_size)
-#         y_pred = model(X_batch)
-#         loss = criterion(y_pred, y_batch.unsqueeze(-1))
-#         test_losses.append(loss.item())
-#         predictions.extend(y_pred.cpu().numpy())
-#         actuals.extend(y_batch.cpu().numpy())
-#
-# test_loss = np.mean(test_losses)
-# print(f'Test Loss: {test_loss}')
-#
-# # Vorhersagen und tatsächliche Werte zurückskalieren
-# def inverse_scaling(scaled_values, min_val, max_val):
-#     return scaled_values * (max_val - min_val) + min_val
-#
-# predictions = inverse_scaling(np.array(predictions).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
-# actuals = inverse_scaling(np.array(actuals).reshape(-1, 1), min_vals['close'], max_vals['close']).flatten()
-#
-# # Visualisierung der Vorhersagen und der tatsächlichen Werte
-# plt.figure(figsize=(14, 5))
-# dates = data.index[lookback_range + train_size + val_size:lookback_range + train_size + val_size + len(actuals)]
-# plt.plot(dates, actuals, label='Actual Prices')
-# plt.plot(dates, predictions, label='Predicted Prices')
-# plt.title('Crude Oil Prices Prediction on Test Data')
-# plt.xlabel('Time (Days)')
-# plt.ylabel('Price (USD)')
-# plt.legend()
-# plt.show()

@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
-from optuna_db_controller import create_study
+from Hyperparameter_DB.optuna_db_controller import create_study
+import warnings
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -15,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Daten laden
 data = pd.read_csv('../data/Crude_Oil_data.csv')
 data['date'] = pd.to_datetime(data['date'])
-data = data.set_index('date')[['close']]  # Nur "close" betrachten
+data = data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
 
 # Skalierung der Daten
 def min_max_scaling(data):
@@ -26,16 +26,18 @@ def min_max_scaling(data):
 
 scaled_data, min_vals, max_vals = min_max_scaling(data)
 
-# Daten für RNN vorbereiten
-def prepare_data_for_rnn(data_frame, n_steps):
+# Daten für LSTM vorbereiten
+def prepare_data_for_lstm(data_frame, n_steps):
     output = data_frame.copy()
+    n_features = data_frame.shape[1]
     for i in range(1, n_steps + 1):
-        output[f'close(t-{i})'] = data_frame['close'].shift(i)  # Nur "close" verwenden
+        for col in data_frame.columns:
+            output[f'{col}(t-{i})'] = data_frame[col].shift(i)
     output.dropna(inplace=True)
     return output
 
 lookback_range = 7
-shifted_data = prepare_data_for_rnn(scaled_data, lookback_range)
+shifted_data = prepare_data_for_lstm(scaled_data, lookback_range)
 
 # Daten in Tensoren umwandeln
 def create_tensors(data_frame):
@@ -50,43 +52,49 @@ dataset = TensorDataset(X, y)
 
 # Datensatz in Trainings-, Validierungs- und Testdatensatz aufteilen
 train_size = int(0.7 * len(dataset))  # 70% für Training
-val_size = int(0.2 * len(dataset))  # 20% für Validierung
+val_size = int(0.2 * len(dataset))    # 20% für Validierung
 test_size = len(dataset) - train_size - val_size  # 10% für Test
 
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
+# warning which occurs during certain hyperparameter testings. (numlayer =< 1 --> dropout superfluous)
+# However, the condition being warned about does not affect the correctness of the model
+warnings.filterwarnings("ignore", message="dropout option adds dropout after all but last recurrent layer, so non-zero dropout expects num_layers greater than 1, but got dropout=")
 
-# RNN Modell
-class RNNModel(nn.Module):
-    def __init__(self, input_size, hidden_layer_size, output_size, num_layers=1):
-        super(RNNModel, self).__init__()
+
+# LSTM Modell mit Dropout
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
+        super(LSTMModel, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.num_layers = num_layers
-        self.rnn = nn.RNN(input_size, hidden_layer_size, num_layers=num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_layer_size, num_layers, batch_first=True, dropout=0.2)
+        self.dropout = nn.Dropout(0.2)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
         batch_size = input_seq.size(0)
-        h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
-        rnn_out, _ = self.rnn(input_seq, h_0)
-        predictions = self.linear(rnn_out[:, -1, :])
+        h0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        c0 = torch.zeros(self.num_layers, batch_size, self.hidden_layer_size).to(device)
+        lstm_out, _ = self.lstm(input_seq, (h0, c0))
+        lstm_out = self.dropout(lstm_out[:, -1, :])
+        predictions = self.linear(lstm_out)
         return predictions
-
 
 # Optuna-Studie erstellen
 def objective(trial):
     input_size = X.shape[1]  # Anzahl der Features
     output_size = 1  # Wir sagen die Schlusskurse voraus
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
+    num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
     learn_rate = trial.suggest_float('learn_rate', 1e-3, 1e-1)
-    num_layers = trial.suggest_int('num_layers', 1, 3)  # Anzahl der Schichten
-    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
+    epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model = RNNModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
+    model = LSTMModel(input_size, hidden_layer_size, output_size, num_layers).to(device)
     criterion = nn.MSELoss()
     optimizer = Adam(model.parameters(), lr=learn_rate)
 
@@ -113,17 +121,15 @@ def objective(trial):
 
     return np.mean(val_losses)
 
-
 # Optuna-Studie starten
 study = create_study()
 study.optimize(objective, n_trials=10)
 
 # Beste Ergebnisse anzeigen
-print('\nBest trial:')
+print("\nBest trial:")
 trial = study.best_trial
-
-print('Value: ', trial.value)
-print('Params: ')
+print(f"  Value: {trial.value}")
+print("  Params: ")
 for key, value in trial.params.items():
-    print(f'    {key}: {value}')
-print('')
+    print(f"    {key}: {value}")
+

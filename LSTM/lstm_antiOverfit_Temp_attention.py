@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from copy import deepcopy as dc
 import matplotlib.dates as mdates
-from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
+from Hyperparameter_DB.optuna_db_controller import get_best_trial_from_study
 import warnings
 
 

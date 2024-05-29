@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 import matplotlib.dates as mdates
-from Hyperparameter_testing.optuna_db_controller import get_best_trial_from_study
+from Hyperparameter_DB.optuna_db_controller import get_best_trial_from_study
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
