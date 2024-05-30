@@ -96,14 +96,14 @@ def create_study():
 
 
 def delete_study(study_name):
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     print(f'Deleting study: {study_name}')
     optuna.delete_study(study_name=study_name, storage=storage)
     print(f'Study {study_name} deleted successfully')
 
 
 def transfer_trials(source_study_name, target_study_name):
-    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    storage = RDBStorage(url=sqlite_url)
 
     source_study = optuna.load_study(study_name=source_study_name, storage=storage)
     target_study = optuna.load_study(study_name=target_study_name, storage=storage)
@@ -116,7 +116,7 @@ def transfer_trials(source_study_name, target_study_name):
 
 
 def get_best_trial():
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     best_trial = None
     best_study_name = None
@@ -179,7 +179,7 @@ def get_best_trials_from_study(study_name, n_best=5):
 
 
 def get_all_trials_from_study(study_name):
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
 
     try:
         study = optuna.load_study(study_name=study_name, storage=storage)
@@ -202,7 +202,7 @@ def get_all_trials_from_study(study_name):
 
 
 def stop_running_study(study_name):
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
 
     try:
         study = optuna.load_study(study_name=study_name, storage=storage)
@@ -213,7 +213,7 @@ def stop_running_study(study_name):
 
 
 def count_all_trials():
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     total_trials = 0
 
@@ -258,7 +258,7 @@ def get_trial_with_highest_loss_from_study(study_name):
 
 
 def get_trial_with_highest_loss_overall():
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     worst_trial = None
     worst_study_name = None
@@ -331,7 +331,7 @@ def get_best_and_worst_trial_from_study(study_name):
 
 
 def count_studies():
-    storage = RDBStorage(url='sqlite:///optuna_study.db')
+    storage = RDBStorage(url=sqlite_url)
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     num_studies = len(study_summaries)
     print(f"Total number of studies for models: {num_studies}")
@@ -339,7 +339,7 @@ def count_studies():
 
 
 def delete_all_studies():
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     study_summaries = optuna.get_all_study_summaries(storage=storage)
 
     for summary in study_summaries:
@@ -351,7 +351,7 @@ def delete_all_studies():
 
 
 def list_all_studies_with_details():
-    storage = 'sqlite:///optuna_study.db'
+    storage = sqlite_url
     study_summaries = optuna.get_all_study_summaries(storage=storage)
     study_details = []
 
