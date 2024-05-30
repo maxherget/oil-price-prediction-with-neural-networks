@@ -101,6 +101,94 @@ def delete_study(study_name):
     optuna.delete_study(study_name=study_name, storage=storage)
     print(f'Study {study_name} deleted successfully')
 
+def stop_running_study(study_name):
+    storage = sqlite_url
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+        study.stop()
+        print(f'Study {study_name} has been stopped.')
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+
+
+def count_studies():
+    storage = RDBStorage(url=sqlite_url)
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+    num_studies = len(study_summaries)
+    print(f"Total number of studies for models: {num_studies}")
+    return num_studies
+
+
+def delete_all_studies():
+    storage = sqlite_url
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+
+    for summary in study_summaries:
+        study_name = summary.study_name
+        optuna.delete_study(study_name=study_name, storage=storage)
+        print(f'Study {study_name} deleted successfully')
+
+    print("All studies have been deleted.")
+
+
+def list_all_studies_with_details():
+    storage = sqlite_url
+    study_summaries = optuna.get_all_study_summaries(storage=storage)
+    study_details = []
+
+    for summary in study_summaries:
+        study_name = summary.study_name
+        study = optuna.load_study(study_name=study_name, storage=storage)
+        trial_count = len(study.trials)
+        best_trial = study.best_trial
+
+        if best_trial:
+            study_details.append((study_name, trial_count, best_trial.value, best_trial.number, best_trial.params))
+        else:
+            study_details.append((study_name, trial_count, None, None, None))
+
+    keyword_order = {"lstm": 0, "rnn": 1, "cnn": 2, "gru": 3}
+    grouped_studies = {keyword: [] for keyword in keyword_order.keys()}
+
+    for detail in study_details:
+        study_name, trial_count, best_value, best_trial_id, params = detail
+        for keyword in keyword_order.keys():
+            if keyword in study_name:
+                grouped_studies[keyword].append(detail)
+                break
+
+    current_model_type = None
+    for keyword in keyword_order.keys():
+        studies = grouped_studies[keyword]
+        if not studies:
+            continue
+
+
+        studies.sort(key=lambda x: (x[2] if x[2] is not None else float('inf')))
+
+        if current_model_type != keyword.upper():
+            if current_model_type is not None:
+                print("-" * 100)
+            current_model_type = keyword.upper()
+            print(f"{current_model_type} Models:\n")
+
+        for detail in studies:
+            study_name, trial_count, best_value, best_trial_id, params = detail
+            print(f"Model Name: {study_name}")
+            print(f"Number of Trials: {trial_count}")
+            if best_value is not None:
+                print(f"Best Trial ID: {best_trial_id}")
+                print(f"Best Trial Value: {best_value}")
+                print("Best Hyperparameters:")
+                for param_name, param_value in params.items():
+                    print(f"  {param_name}: {param_value}")
+            else:
+                print("No trials found.")
+            print("")
+
+
+    return study_details
 
 def transfer_trials(source_study_name, target_study_name):
     storage = RDBStorage(url=sqlite_url)
@@ -199,17 +287,6 @@ def get_all_trials_from_study(study_name):
     else:
         print(f'No trials found for study: {study_name}')
     return trials
-
-
-def stop_running_study(study_name):
-    storage = sqlite_url
-
-    try:
-        study = optuna.load_study(study_name=study_name, storage=storage)
-        study.stop()
-        print(f'Study {study_name} has been stopped.')
-    except KeyError:
-        print(f'No study found with the name: {study_name}')
 
 
 def count_all_trials():
@@ -330,83 +407,35 @@ def get_best_and_worst_trial_from_study(study_name):
     return best_trial, highest_loss_trial
 
 
-def count_studies():
-    storage = RDBStorage(url=sqlite_url)
+def get_trial_with_specific_params(params):
+    storage = RDBStorage(
+        url=sqlite_url,
+        engine_kwargs={
+            'connect_args': {'timeout': 10}
+        }
+    )
+
     study_summaries = optuna.get_all_study_summaries(storage=storage)
-    num_studies = len(study_summaries)
-    print(f"Total number of studies for models: {num_studies}")
-    return num_studies
+    matching_trials = []
 
-
-def delete_all_studies():
-    storage = sqlite_url
-    study_summaries = optuna.get_all_study_summaries(storage=storage)
-
-    for summary in study_summaries:
-        study_name = summary.study_name
-        optuna.delete_study(study_name=study_name, storage=storage)
-        print(f'Study {study_name} deleted successfully')
-
-    print("All studies have been deleted.")
-
-
-def list_all_studies_with_details():
-    storage = sqlite_url
-    study_summaries = optuna.get_all_study_summaries(storage=storage)
-    study_details = []
-
-    for summary in study_summaries:
-        study_name = summary.study_name
+    for study_summary in study_summaries:
+        study_name = study_summary.study_name
         study = optuna.load_study(study_name=study_name, storage=storage)
-        trial_count = len(study.trials)
-        best_trial = study.best_trial
+        for trial in study.trials:
+            if all(trial.params.get(k) == v for k, v in params.items()):
+                matching_trials.append((study_name, trial))
 
-        if best_trial:
-            study_details.append((study_name, trial_count, best_trial.value, best_trial.number, best_trial.params))
-        else:
-            study_details.append((study_name, trial_count, None, None, None))
-
-    keyword_order = {"lstm": 0, "rnn": 1, "cnn": 2, "gru": 3}
-    grouped_studies = {keyword: [] for keyword in keyword_order.keys()}
-
-    for detail in study_details:
-        study_name, trial_count, best_value, best_trial_id, params = detail
-        for keyword in keyword_order.keys():
-            if keyword in study_name:
-                grouped_studies[keyword].append(detail)
-                break
-
-    current_model_type = None
-    for keyword in keyword_order.keys():
-        studies = grouped_studies[keyword]
-        if not studies:
-            continue
-
-
-        studies.sort(key=lambda x: (x[2] if x[2] is not None else float('inf')))
-
-        if current_model_type != keyword.upper():
-            if current_model_type is not None:
-                print("-" * 100)
-            current_model_type = keyword.upper()
-            print(f"{current_model_type} Models:\n")
-
-        for detail in studies:
-            study_name, trial_count, best_value, best_trial_id, params = detail
-            print(f"Model Name: {study_name}")
-            print(f"Number of Trials: {trial_count}")
-            if best_value is not None:
-                print(f"Best Trial ID: {best_trial_id}")
-                print(f"Best Trial Value: {best_value}")
-                print("Best Hyperparameters:")
-                for param_name, param_value in params.items():
-                    print(f"  {param_name}: {param_value}")
-            else:
-                print("No trials found.")
-            print("")
-
-
-    return study_details
+    if matching_trials:
+        for study_name, trial in matching_trials:
+            print(f"Study: {study_name}")
+            print(f"Trial ID: {trial.number}")
+            print(f"Loss Value: {trial.value}")
+            print("Hyperparameters:")
+            for param_name, param_value in trial.params.items():
+                print(f"  {param_name}: {param_value}")
+            print("" + "=" * 100)
+    else:
+        print("No matching trials found for the given parameters.")
 
 
 if __name__ == "__main__":
@@ -426,6 +455,16 @@ if __name__ == "__main__":
         # 'lstm_temp_attention_optuna'
      ]
     run_studies_for_models(models_to_run)
+
+    specific_params = {
+        'hidden_layer_size': 49,
+        'num_layers': 1,
+        'batch_size': 81,
+        'learn_rate': 0.09704270169766235,
+        'epochs': 53
+    }
+    print("\nTrials with specific parameters:\n")
+    get_trial_with_specific_params(specific_params)
 
     print("\nOverall statistics:")
     print("" + "=" * 100)
