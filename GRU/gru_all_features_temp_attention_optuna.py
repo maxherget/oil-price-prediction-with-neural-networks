@@ -15,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Daten laden
 data = get_data()
 data['date'] = pd.to_datetime(data['date'])
-data = data.set_index('date')[['close']]  # Nur "close" behalten
+data = data.set_index('date')[['open', 'high', 'low', 'volume', 'close']]
 
 
 # Skalierung der Daten
@@ -34,7 +34,8 @@ def prepare_data_for_rnn(data_frame, n_steps):
     output = data_frame.copy()
     n_features = data_frame.shape[1]
     for i in range(1, n_steps + 1):
-        output[f'close(t-{i})'] = data_frame['close'].shift(i)  # Nur "close" verwenden
+        for col in data_frame.columns:
+            output[f'{col}(t-{i})'] = data_frame[col].shift(i)
     output.dropna(inplace=True)
     return output
 
@@ -63,35 +64,53 @@ test_size = len(dataset) - train_size - val_size  # 10% für Test
 train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size, test_size])
 
 
-# GRU Modell
-class GRUModel(nn.Module):
+# Attention Layer
+class AttentionLayer(nn.Module):
+    def __init__(self, hidden_layer_size):
+        super(AttentionLayer, self).__init__()
+        self.attention_weights = nn.Parameter(torch.Tensor(hidden_layer_size, 1))
+        nn.init.xavier_uniform_(self.attention_weights)
+
+    def forward(self, hidden_states):
+        # hidden_states: [batch_size, seq_len, hidden_layer_size]
+        scores = torch.matmul(hidden_states, self.attention_weights).squeeze(-1)  # [batch_size, seq_len]
+        attention_weights = torch.softmax(scores, dim=1)  # [batch_size, seq_len]
+        context_vector = torch.matmul(attention_weights.unsqueeze(1), hidden_states).squeeze(
+            1)  # [batch_size, hidden_layer_size]
+        return context_vector, attention_weights
+
+
+# GRU Modell mit Attention
+class GRUModelWithAttention(nn.Module):
     def __init__(self, input_size, hidden_layer_size, output_size, num_layers):
-        super(GRUModel, self).__init__()
+        super(GRUModelWithAttention, self).__init__()
         self.hidden_layer_size = hidden_layer_size
         self.num_layers = num_layers
         self.gru = nn.GRU(input_size, hidden_layer_size, num_layers, batch_first=True)
+        self.attention = AttentionLayer(hidden_layer_size)
         self.linear = nn.Linear(hidden_layer_size, output_size)
 
     def forward(self, input_seq):
         gru_out, _ = self.gru(input_seq)
-        predictions = self.linear(gru_out[:, -1, :])
-        return predictions
+        context_vector, attention_weights = self.attention(gru_out)
+        predictions = self.linear(context_vector)
+        return predictions, attention_weights
 
 
 # Optuna-Studie erstellen
 def objective(trial):
-    input_size = 1  # Nur "close" als Feature
+    input_size = X.shape[1]  # Anzahl der Features
     output_size = 1  # Wir sagen die Schlusskurse voraus
     hidden_layer_size = trial.suggest_int('hidden_layer_size', 10, 100)
-    num_layers = trial.suggest_int('num_layers', 1, 3)  # Neue Zeile für die Anzahl der Schichten
+    num_layers = trial.suggest_int('num_layers', 1, 3)
     batch_size = trial.suggest_int('batch_size', 16, 128)
     learn_rate = trial.suggest_float('learn_rate', 1e-3, 1e-1)
-    epochs = trial.suggest_int('epochs', 10, 100)  # Hyperparameter für die Anzahl der Epochen
+    epochs = trial.suggest_int('epochs', 10, 100)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    model = GRUModel(input_size, hidden_layer_size, output_size, num_layers).to(device)  # Anpassung des Modells
+    model = GRUModelWithAttention(input_size, hidden_layer_size, output_size, num_layers).to(device)
     criterion = nn.MSELoss()
     optimizer = Adam(model.parameters(), lr=learn_rate)
 
@@ -99,10 +118,10 @@ def objective(trial):
         model.train()
         for X_batch, y_batch in train_loader:
             optimizer.zero_grad()
-            X_batch = X_batch.unsqueeze(-1)  # Dimension für "close" hinzufügen
-            y_batch = y_batch.unsqueeze(-1)  # Dimension für "close" hinzufügen
-            y_pred = model(X_batch)
-            loss = criterion(y_pred, y_batch)
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
+            y_pred, _ = model(X_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
             loss.backward()
             optimizer.step()
 
@@ -110,10 +129,10 @@ def objective(trial):
     val_losses = []
     with torch.no_grad():
         for X_batch, y_batch in val_loader:
-            X_batch = X_batch.unsqueeze(-1)  # Dimension für "close" hinzufügen
-            y_batch = y_batch.unsqueeze(-1)  # Dimension für "close" hinzufügen
-            y_pred = model(X_batch)
-            loss = criterion(y_pred, y_batch)
+            if X_batch.ndim != 3:
+                X_batch = X_batch.view(-1, 1, input_size)
+            y_pred, _ = model(X_batch)
+            loss = criterion(y_pred, y_batch.unsqueeze(-1))
             val_losses.append(loss.item())
 
     return np.mean(val_losses)
