@@ -12,6 +12,19 @@ db_absolute_path = os.path.abspath(db_relative_path)
 sqlite_url = f'sqlite:///{db_absolute_path}'
 
 
+def find_project_root_directory():
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+
+    # Logik zur Bestimmung des Projektwurzelverzeichnisses
+    # Angenommen, das Projektwurzelverzeichnis enthält eine bestimmte Datei oder einen bestimmten Ordner, z.B. "README.md"
+    while current_directory != os.path.dirname(current_directory):  # Schleife bis zum Wurzelverzeichnis
+        if os.path.exists(os.path.join(current_directory, 'README.md')):  # Hier nach einem Indikator suchen
+            return current_directory
+        current_directory = os.path.dirname(current_directory)
+
+    raise Exception("Projektwurzelverzeichnis konnte nicht gefunden werden.")
+
+
 def find_script_path(script_name, root_directory, script_extension='.py'):
     for root, _, files in os.walk(root_directory):
         for file in files:
@@ -20,11 +33,12 @@ def find_script_path(script_name, root_directory, script_extension='.py'):
     return None
 
 
-def run_studies_for_models(scripts, root_directory):
+def run_studies_for_models(scripts):
     python_executable = sys.executable  # Holt sich den aktuellen Python-Interpreter
+    project_root_directory = find_project_root_directory()  # Bestimmt das Projektwurzelverzeichnis
 
     for script in scripts:
-        script_path = find_script_path(script, root_directory)
+        script_path = find_script_path(script, project_root_directory)
         if script_path:
             script_path = os.path.abspath(script_path)  # Absoluten Pfad zum Skript verwenden
 
@@ -38,7 +52,7 @@ def run_studies_for_models(scripts, root_directory):
             print(result.stdout)
             print("" + "=" * 100)
         else:
-            print(f"Script '{script}' not found in directory '{root_directory}'")
+            print(f"Script '{script}' not found in directory '{project_root_directory}'")
 
 
 
@@ -402,8 +416,8 @@ if __name__ == "__main__":
     #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
 
     models_to_run = [
-         'gru_standard_all_features_optuna'
-        # 'rnn_standard_optuna.py',
+         'gru_standard_all_features_optuna',
+         'rnn_standard_optuna'
         # 'rnn_standard_all_features_optuna.py',
         # 'cnn_standard_optuna.py',
         # 'cnn_standard_all_features_optuna.py',
@@ -417,7 +431,7 @@ if __name__ == "__main__":
         # 'lstm_temp_attention_optuna.py'
 
      ]
-    run_studies_for_models(models_to_run, "GRU")
+    run_studies_for_models(models_to_run)
     print("\nOverall statistics:")
     print("" + "=" * 100)
     count_studies()
