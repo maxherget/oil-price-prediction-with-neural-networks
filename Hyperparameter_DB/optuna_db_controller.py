@@ -15,10 +15,8 @@ sqlite_url = f'sqlite:///{db_absolute_path}'
 def find_project_root_directory():
     current_directory = os.path.dirname(os.path.abspath(__file__))
 
-    # Logik zur Bestimmung des Projektwurzelverzeichnisses
-    # Angenommen, das Projektwurzelverzeichnis enthält eine bestimmte Datei oder einen bestimmten Ordner, z.B. "README.md"
-    while current_directory != os.path.dirname(current_directory):  # Schleife bis zum Wurzelverzeichnis
-        if os.path.exists(os.path.join(current_directory, 'README.md')):  # Hier nach einem Indikator suchen
+    while current_directory != os.path.dirname(current_directory):
+        if os.path.exists(os.path.join(current_directory, 'README.md')):
             return current_directory
         current_directory = os.path.dirname(current_directory)
 
@@ -34,14 +32,13 @@ def find_script_path(script_name, root_directory, script_extension='.py'):
 
 
 def run_studies_for_models(scripts):
-    python_executable = sys.executable  # Holt sich den aktuellen Python-Interpreter
-    project_root_directory = find_project_root_directory()  # Bestimmt das Projektwurzelverzeichnis
+    python_executable = sys.executable
+    project_root_directory = find_project_root_directory()
 
     for script in scripts:
         script_path = find_script_path(script, project_root_directory)
         if script_path:
-            script_path = os.path.abspath(script_path)  # Absoluten Pfad zum Skript verwenden
-
+            script_path = os.path.abspath(script_path)
             # Befehl zum Ausführen des Skripts
             result = subprocess.run([python_executable, script_path], capture_output=True, text=True)
 
@@ -413,25 +410,23 @@ def list_all_studies_with_details():
 
 
 if __name__ == "__main__":
-    #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
-
     models_to_run = [
-         'gru_standard_all_features_optuna',
-         'rnn_standard_optuna'
-        # 'rnn_standard_all_features_optuna.py',
-        # 'cnn_standard_optuna.py',
-        # 'cnn_standard_all_features_optuna.py',
-        # 'gru_standard_optuna.py'
-        # 'lstm_antiOverfit_optuna.py',
-        # 'lstm_antiOverfit_all_features_optuna.py',
-        # 'lstm_antiOverfit_temp_attention_optuna.py',
-        # 'lstm_standard_all_features_optuna.py',
-        # 'lstm_standard_optuna.py',
-        # 'lstm_temp_attention_all_features_optuna.py',
-        # 'lstm_temp_attention_optuna.py'
-
+        # 'gru_standard_all_features_optuna',
+        # 'rnn_standard_optuna'
+        # 'rnn_standard_all_features_optuna',
+        # 'cnn_standard_optuna',
+        # 'cnn_standard_all_features_optuna',
+        # 'gru_standard_optuna'
+        # 'lstm_antiOverfit_optuna',
+        # 'lstm_antiOverfit_all_features_optuna',
+        # 'lstm_antiOverfit_temp_attention_optuna',
+        # 'lstm_standard_all_features_optuna',
+        # 'lstm_standard_optuna'
+        # 'lstm_temp_attention_all_features_optuna',
+        # 'lstm_temp_attention_optuna'
      ]
     run_studies_for_models(models_to_run)
+
     print("\nOverall statistics:")
     print("" + "=" * 100)
     count_studies()
@@ -444,4 +439,6 @@ if __name__ == "__main__":
     print("" + "=" * 100)
     print("Summary of all Models:\n")
     list_all_studies_with_details()
+
+    #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
 
