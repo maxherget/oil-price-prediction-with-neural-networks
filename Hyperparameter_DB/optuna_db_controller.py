@@ -20,7 +20,7 @@ def find_project_root_directory():
             return current_directory
         current_directory = os.path.dirname(current_directory)
 
-    raise Exception("Projektwurzelverzeichnis konnte nicht gefunden werden.")
+    raise Exception("root directory could not be found.")
 
 
 def find_script_path(script_name, root_directory, script_extension='.py'):
@@ -74,8 +74,8 @@ def create_study():
     }
     initial_params_cnn = {
         'conv1_out_channels': 32,
-        'conv2_out_channels': 64,
-        'fc1_units': 128,
+        'conv2_out_channels': 32,
+        'fc1_units': 50,
         'batch_size': 16,
         'learn_rate': 0.01,
         'epochs': 50
@@ -474,11 +474,11 @@ if __name__ == "__main__":
     run_studies_for_models(models_to_run)
 
     specific_params = {
-        'hidden_layer_size': 49,
-        'num_layers': 1,
-        'batch_size': 81,
-        'learn_rate': 0.09704270169766235,
-        'epochs': 53
+        'hidden_layer_size': 50,
+        'num_layers': 2,
+        'batch_size': 16,
+        'learn_rate': 0.01,
+        'epochs': 50
     }
     print("\nTrials with specific parameters:\n")
     get_trial_with_specific_params(specific_params)
