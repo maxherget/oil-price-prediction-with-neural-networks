@@ -474,7 +474,7 @@ def get_trials_with_specific_params(params):
             print("Hyperparameters:")
             for param_name, param_value in trial.params.items():
                 print(f"  {param_name}: {param_value}")
-            print("" + "=" * 100)
+            print("" + "-" * 100)
     else:
         print("No matching trials found for the given parameters.")
 
@@ -520,5 +520,5 @@ if __name__ == "__main__":
     print("Summary of all Models:\n")
     list_all_studies_with_details()
 
-    #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
+    #get_best_and_worst_trial_from_study("gru_all_features_temp_attention_optuna")
 

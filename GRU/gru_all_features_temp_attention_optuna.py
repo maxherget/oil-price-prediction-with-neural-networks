@@ -140,7 +140,7 @@ def objective(trial):
 
 # Optuna-Studie starten
 study = create_study()
-study.optimize(objective, n_trials=5)
+study.optimize(objective, n_trials=50)
 
 # Beste Ergebnisse anzeigen
 print('\nBest trial:')
