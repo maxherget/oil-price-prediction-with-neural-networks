@@ -12,20 +12,34 @@ db_absolute_path = os.path.abspath(db_relative_path)
 sqlite_url = f'sqlite:///{db_absolute_path}'
 
 
-def run_studies_for_models(scripts):
+def find_script_path(script_name, root_directory, script_extension='.py'):
+    for root, _, files in os.walk(root_directory):
+        for file in files:
+            if file == f"{script_name}{script_extension}":
+                return os.path.join(root, file)
+    return None
+
+
+def run_studies_for_models(scripts, root_directory):
     python_executable = sys.executable  # Holt sich den aktuellen Python-Interpreter
+
     for script in scripts:
-        script_path = os.path.abspath(script)  # Absoluten Pfad zum Skript verwenden
+        script_path = find_script_path(script, root_directory)
+        if script_path:
+            script_path = os.path.abspath(script_path)  # Absoluten Pfad zum Skript verwenden
 
-        # Befehl zum Ausführen des Skripts
-        result = subprocess.run([python_executable, script_path], capture_output=True, text=True)
+            # Befehl zum Ausführen des Skripts
+            result = subprocess.run([python_executable, script_path], capture_output=True, text=True)
 
-        # Ausgabe des Skripts anzeigen
-        print(f"\nOutput for {script_path}:\n")
-        if result.stderr:
-            print(result.stderr)
-        print(result.stdout)
-        print("" + "=" * 100)
+            # Ausgabe des Skripts anzeigen
+            print(f"\nOutput for {script_path}:\n")
+            if result.stderr:
+                print(result.stderr)
+            print(result.stdout)
+            print("" + "=" * 100)
+        else:
+            print(f"Script '{script}' not found in directory '{root_directory}'")
+
 
 
 def create_study():
@@ -388,6 +402,7 @@ if __name__ == "__main__":
     #get_best_and_worst_trial_from_study("lstm_standard_all_features_optuna")
 
     models_to_run = [
+         'gru_standard_all_features_optuna'
         # 'rnn_standard_optuna.py',
         # 'rnn_standard_all_features_optuna.py',
         # 'cnn_standard_optuna.py',
@@ -401,35 +416,8 @@ if __name__ == "__main__":
         # 'lstm_temp_attention_all_features_optuna.py',
         # 'lstm_temp_attention_optuna.py'
 
-    ]
-    # run_studies_for_models(models_to_run)
-    # get_best_and_worst_trial_from_study('lstm_antiOverfit_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_antiOverfit_all_features_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_antiOverfit_temp_attention_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_standard_all_features_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_standard_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_temp_attention_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('lstm_temp_attention_all_features_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('rnn_standard_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('rnn_standard_all_features_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('cnn_standard_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('cnn_standard_all_features_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('gru_standard_optuna')
-    # print("" + "=" * 100)
-    # get_best_and_worst_trial_from_study('gru_standard_all_features_optuna')
-
-
+     ]
+    run_studies_for_models(models_to_run, "GRU")
     print("\nOverall statistics:")
     print("" + "=" * 100)
     count_studies()
