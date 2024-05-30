@@ -245,6 +245,30 @@ def get_best_trial():
     return best_trial
 
 
+def delete_trial_by_id(study_name, trial_id):
+    storage = RDBStorage(
+        url=sqlite_url,
+        engine_kwargs={
+            'connect_args': {'timeout': 10}
+        }
+    )
+
+    try:
+        study = optuna.load_study(study_name=study_name, storage=storage)
+    except KeyError:
+        print(f'No study found with the name: {study_name}')
+        return
+
+    try:
+        optuna.delete_trial(study.study_id, trial_id, storage)
+        print(f'Trial ID {trial_id} deleted successfully from study {study_name}')
+    except KeyError:
+        print(f'No trial with ID {trial_id} found in study {study_name}')
+
+
+
+
+
 def get_best_trial_from_study(study_name):
     storage = RDBStorage(
         url=sqlite_url,
@@ -424,7 +448,7 @@ def get_best_and_worst_trial_from_study(study_name):
     return best_trial, highest_loss_trial
 
 
-def get_trial_with_specific_params(params):
+def get_trials_with_specific_params(params):
     storage = RDBStorage(
         url=sqlite_url,
         engine_kwargs={
@@ -481,7 +505,7 @@ if __name__ == "__main__":
         'epochs': 50
     }
     print("\nTrials with specific parameters:\n")
-    get_trial_with_specific_params(specific_params)
+    get_trials_with_specific_params(specific_params)
 
     print("\nOverall statistics:")
     print("" + "=" * 100)
