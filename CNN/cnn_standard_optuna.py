@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from Hyperparameter_DB.optuna_db_controller import create_study
+from data.data_reader import get_data
 
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
@@ -12,7 +13,7 @@ torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-data = pd.read_csv('../data/Crude_Oil_data.csv')
+data = get_data()
 data['date'] = pd.to_datetime(data['date'])
 data = data.set_index('date')[['close']]  # Nur 'close' Wert behalten
 

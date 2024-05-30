@@ -9,9 +9,7 @@ if you run the corresponding ...Optuna.py of the model in the Python console.
 Further methods for handling the work results can also be put in its main for further information outputs
 
 
-### todo: 
-- datafile load verallgemeinern
-- kenntlich machen das plotzeitraum sich auf testdaten bezieht
+### todo:
 - Projekt Ordnerstruktur aufräumen
 - Ergebnisse für Präsentation vorbereiten 
 - methode die alle loss für einen bestimmte hyperparameter ausgibt

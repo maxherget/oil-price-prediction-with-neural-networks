@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 from torch.optim import Adam
 from Hyperparameter_DB.optuna_db_controller import create_study
+from data.data_reader import get_data
 from copy import deepcopy as dc
 
 # Seeds für Reproduzierbarkeit setzen
@@ -15,7 +15,7 @@ torch.manual_seed(0)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
+test_data = get_data()
 test_data = test_data[['date', 'close']]
 test_data['date'] = pd.to_datetime(test_data['date'])
 

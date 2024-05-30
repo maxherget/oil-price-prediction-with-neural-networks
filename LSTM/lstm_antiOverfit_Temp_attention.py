@@ -8,13 +8,14 @@ from torch.optim import Adam
 from copy import deepcopy as dc
 import matplotlib.dates as mdates
 from Hyperparameter_DB.optuna_db_controller import get_best_trial_from_study
+from data.data_reader import get_data
 import warnings
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
+test_data = get_data()
 test_data = test_data[['date', 'close']]
 test_data['date'] = pd.to_datetime(test_data['date'])
 

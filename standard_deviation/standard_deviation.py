@@ -1,12 +1,12 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
+from data.data_reader import get_data
 # Seeds für Reproduzierbarkeit setzen
 np.random.seed(0)
 
 # Daten laden
-test_data = pd.read_csv('../data/Crude_Oil_data.csv')
+test_data = get_data()
 test_data = test_data[['date', 'close']]
 test_data['date'] = pd.to_datetime(test_data['date'])
 
