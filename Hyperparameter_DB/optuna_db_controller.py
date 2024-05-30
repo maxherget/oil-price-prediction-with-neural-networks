@@ -64,32 +64,49 @@ def create_study():
         }
     )
 
+    # Vordefinierte Hyperparameter für LSTM und CNN
+    initial_params_normal = {
+        'hidden_layer_size': 50,
+        'num_layers': 2,
+        'batch_size': 16,
+        'learn_rate': 0.01,
+        'epochs': 50
+    }
+    initial_params_cnn = {
+        'conv1_out_channels': 32,
+        'conv2_out_channels': 64,
+        'fc1_units': 128,
+        'batch_size': 16,
+        'learn_rate': 0.01,
+        'epochs': 50
+    }
+
+    # Bestimme die initialen Parameter basierend auf dem Modelltyp
+    if 'cnn' in caller_file:
+        initial_params = initial_params_cnn
+    else:
+        initial_params = initial_params_normal
+
+    study_exists = False
     try:
-        best_trials = get_best_trials_from_study(caller_file)
-        if not best_trials.empty:
-            best_params = best_trials[
-                    ['params_hidden_layer_size', 'params_num_layers', 'params_batch_size', 'params_learn_rate']].to_dict('records')
-        else:
-            best_params = []
+        study = optuna.load_study(study_name=caller_file, storage=storage)
+        study_exists = True
     except KeyError:
-        best_params = []
+        pass
 
-
-    # Initialize TPESampler
-    sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True,
-                                         warn_independent_sampling=False)
-    # constant_liar = True -> attribe for sampler for running many trials parallel.
-
-    study = optuna.create_study(
-        study_name=caller_file,
-        direction='minimize',
-        storage=storage,
-        load_if_exists=True,
-        sampler=sampler
-    )
-
-    for params in best_params:
-        study.enqueue_trial(params)
+    if not study_exists:
+        # Initialize TPESampler
+        sampler = optuna.samplers.TPESampler(seed=0, n_startup_trials=10, multivariate=True,
+                                             warn_independent_sampling=False)
+        study = optuna.create_study(
+            study_name=caller_file,
+            direction='minimize',
+            storage=storage,
+            load_if_exists=True,
+            sampler=sampler
+        )
+        # Enqueue the initial parameters for the first trial
+        study.enqueue_trial(initial_params)
 
     print(f"Study '{caller_file}' created or loaded successfully.")
     return study
