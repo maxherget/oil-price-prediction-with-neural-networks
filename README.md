@@ -7,13 +7,15 @@
 -You can start respective hyperparameter testing studies for the models,
 if you run the corresponding model_***optuna.py*** of the model in the Python console. 
 How many Parameter trials per run can be changed by *study.optimize(objective, **n_trials=?**)*
-Or u can start them with the ***run_studies_for_models*** methode from [optuna_db_controller](Hyperparameter_DB/optuna_db_controller.py)
+Or u can start sveral in succession with the ***run_studies_for_models*** method from [optuna_db_controller](Hyperparameter_DB/optuna_db_controller.py)
 
 -You can get an overall overview of the models and their results by running the main of the [optuna_db_controller](Hyperparameter_DB/optuna_db_controller.py).
 Further already implemented methods for handling the work results can also be put in its main for further information outputs
 
 
 these are the params which every models got tested with for comparability of models, they can be changed in the ***create_Study()*** Methode im [optuna_db_controller](Hyperparameter_DB/optuna_db_controller.py)
+
+all models except CNN:
 ```python
     'hidden_layer_size': 50,
     'num_layers': 2,
