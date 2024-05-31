@@ -1,3 +1,5 @@
+Max Herget 580332, Sämi Lastal 584806
+
 ### This application makes it possible to automatically find the best model with the best parameters for the time series predictions of the inserted data set
 
 #### Our focus was the LSTM, but we added a lot of comparison models
