@@ -245,14 +245,6 @@ def get_best_trial():
     return best_trial
 
 
-def delete_trial_by_id(study_name, trial_id):
-    storage = RDBStorage(
-        url=sqlite_url,
-        engine_kwargs={
-            'connect_args': {'timeout': 10}
-        }
-    )
-
     try:
         study = optuna.load_study(study_name=study_name, storage=storage)
     except KeyError:
@@ -497,16 +489,6 @@ if __name__ == "__main__":
      ]
     run_studies_for_models(models_to_run)
 
-    specific_params = {
-        'hidden_layer_size': 50,
-        'num_layers': 2,
-        'batch_size': 16,
-        'learn_rate': 0.01,
-        'epochs': 50
-    }
-    print("\nTrials with specific parameters:\n")
-    get_trials_with_specific_params(specific_params)
-
     print("\nOverall statistics:")
     print("" + "=" * 100)
     count_studies()
@@ -520,5 +502,17 @@ if __name__ == "__main__":
     print("Summary of all Models:\n")
     list_all_studies_with_details()
 
+    specific_params = {
+
+        'hidden_layer_size': 50,
+        'num_layers': 2,
+        'batch_size': 16,
+        'learn_rate': 0.01,
+        'epochs': 50
+    }
+    print("\nTrials with specific parameters:\n")
+    get_trials_with_specific_params(specific_params)
+
     #get_best_and_worst_trial_from_study("gru_all_features_temp_attention_optuna")
+
 
