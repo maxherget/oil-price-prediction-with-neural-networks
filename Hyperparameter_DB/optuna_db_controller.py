@@ -483,7 +483,7 @@ if __name__ == "__main__":
         # 'lstm_antiOverfit_all_features_optuna',
         # 'lstm_antiOverfit_temp_attention_optuna',
         # 'lstm_standard_all_features_optuna',
-        # 'lstm_standard_optuna'
+        # 'lstm_standard_optuna',
         # 'lstm_temp_attention_all_features_optuna',
         # 'lstm_temp_attention_optuna'
      ]
@@ -511,8 +511,8 @@ if __name__ == "__main__":
         'epochs': 50
     }
     print("\nTrials with specific parameters:\n")
-    get_trials_with_specific_params(specific_params)
 
+    #get_trials_with_specific_params(specific_params)
     #get_best_and_worst_trial_from_study("gru_all_features_temp_attention_optuna")
 
 
