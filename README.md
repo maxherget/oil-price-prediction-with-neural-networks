@@ -4,7 +4,7 @@ Max Herget 580332, Sämi Lastal 584806
 
 #### Our focus was the LSTM, but we added a lot of comparison models
 
--You can start and train models specifically by executing the corresponding **model.py** in the Python console
+-You can start and train models specifically by executing the corresponding ***model.py*** in the Python console
 
 -You can start respective hyperparameter testing studies for the models,
 if you run the corresponding model_***optuna.py*** of the model in the Python console. 
